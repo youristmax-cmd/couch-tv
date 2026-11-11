@@ -3,7 +3,7 @@ import { flushSync } from 'react-dom';
 import { api, subscribeNow, setTvId } from './api.js';
 import { tick } from './haptics.js';
 import * as Ic from './icons.jsx';
-import { TopBar, ClockWeather, NowCard, AppRow, Pad, Controls, WhoSheet, SlotSheet, rowApps } from './Remote.jsx';
+import { TopBar, ClockWeather, NowCard, AppRow, Pad, Controls, WhoSheet, SlotSheet, AppsSheet, rowApps } from './Remote.jsx';
 import { Watch, launchable } from './Watch.jsx';
 import { AskSheet, MoreSheet, ArrangeSheet, PeopleSheet, Onboarding } from './Sheets.jsx';
 import { usePullDown } from './gestures.js';
@@ -162,7 +162,9 @@ export default function App() {
   useEffect(() => { if (!toast) return undefined; const t = setTimeout(() => setToast(null), toast.text.length > 40 ? 4500 : 2600); return () => clearTimeout(t); }, [toast]);
 
   useEffect(() => { setTv(null); return subscribeNow(setTv, setReach); }, [tvId]);
-  useEffect(() => { api.tvs().then((d) => setTvs(d.tvs || [])).catch(() => {}); }, [reach, tvId]);
+  // The default TV's id: the computer bridge's is living-room, the on-TV app's this-tv (it says so).
+  const [defaultTv, setDefaultTv] = useState('living-room');
+  useEffect(() => { api.tvs().then((d) => { setTvs(d.tvs || []); if (d.default) setDefaultTv(d.default); }).catch(() => {}); }, [reach, tvId]);
   // "Same as the TV": the language picked in the TV home's Home settings. The clock (12 or 24
   // hours) and the weather (on or off, °C or °F) follow those settings too.
   const [tvSettings, setTvSettings] = useState(null);
@@ -219,11 +221,11 @@ export default function App() {
   const serviceName = (id) => appById[id]?.name || SERVICES[id] || id;
 
   const off = Boolean(tv) && (tv.power === 'off' || !tv.tv_connected);
-  const thisTv = tvs.find((t) => t.id === (tvId || 'living-room'));
+  const thisTv = tvs.find((t) => t.id === (tvId || defaultTv));
   const offState = reach === false ? 'unreachable' : thisTv && thisTv.paired === false ? 'unpaired'
     : !tv ? null : tv.waking ? 'waking' : off ? 'off' : null;
   const chooseTv = (id) => {
-    const next = !id || id === 'living-room' ? null : id;
+    const next = !id || id === defaultTv ? null : id;
     store.set('tv.tv', next || ''); setTvId(next); setTvIdState(next); setWakeError(null);
   };
   const [wakeError, setWakeError] = useState(null);
@@ -342,7 +344,7 @@ export default function App() {
         <ClockWeather settings={tvSettings} weather={weather} />
         <NowCard tv={tv} appInfo={appInfo} item={nextUp} serviceName={serviceName} onKey={onKey} onResume={onPlay} />
       </div>
-      <AppRow apps={launchable(apps)} row={row} onLaunch={onLaunch} onAll={onAllApps} onHold={(i) => { setSlot(i); setSheet('slot'); }} />
+      <AppRow apps={launchable(apps)} row={row} onLaunch={onLaunch} onAll={() => setSheet('apps')} onHold={(i) => { setSlot(i); setSheet('slot'); }} />
       <Pad onKey={onKey} offState={offState} wakeError={wakeError} onWake={onWake} onRetry={onRetry}
         tvName={thisTv?.name} onLivingRoom={() => { tick(); chooseTv(null); }} />
       <Controls tv={tv} onKey={onKey} onVolume={onVolume} onType={openType} onPower={onPower} onAsk={askOn ? openAsk : null} />
@@ -370,10 +372,11 @@ export default function App() {
       {toast && <div key={toast.id} className={`toast glass ${toast.kind}`} role="status">{toast.text}</div>}
       <AskSheet ref={askInput} open={sheet === 'ask'} onClose={() => setSheet(null)} recs={recs} onAsk={onAsk}
         playing={tv?.playing} serviceName={serviceName} onPlay={onPlay} scene={scene} />
+      <AppsSheet open={sheet === 'apps'} onClose={() => setSheet(null)} apps={launchable(apps)} onLaunch={onLaunch} />
       <SlotSheet open={sheet === 'slot'} onClose={() => setSheet(null)} apps={launchable(apps)} row={row} slot={slot}
         onPick={pickSlot} onReset={() => { saveRow(null); setSheet(null); }} />
       <WhoSheet open={sheet === 'who'} onClose={() => setSheet(null)} people={people} who={who} setWho={pickWho} />
-      <MoreSheet ref={moreSheet} open={sheet === 'more'} tvs={tvs} tvId={tvId || 'living-room'} onTv={(id) => { tick(); chooseTv(id); }}
+      <MoreSheet ref={moreSheet} open={sheet === 'more'} tvs={tvs} tvId={tvId || defaultTv} onTv={(id) => { tick(); chooseTv(id); }}
         picture={tv?.picture} pictureInfo={pictureInfo} onPicture={onPicture} onClose={() => setSheet(null)} sleepEnds={sleepEnds} sleepError={sleepError} onSleep={onSleep}
         onKey={onKey} typeRef={typeInput} onText={(text) => run(api.text(text), t('sent_to_tv'))} onArrange={() => setSheet('arrange')} onPeople={() => setSheet('people')} />
       <ArrangeSheet open={sheet === 'arrange'} onClose={() => setSheet(null)} tvName={thisTv?.name} />

@@ -270,17 +270,30 @@ export function rowApps(apps, row) {
   return out.filter(Boolean).slice(0, 5);
 }
 
-// Five app tiles in one glass pill. The full list is on Watch (swipe left). With fewer than five
-// apps, All apps fills the row.
+// Five app tiles in one glass pill, then a slim More apps tile that opens every app on the TV.
 export function AppRow({ apps, row, onLaunch, onAll, onHold }) {
   if (!apps?.length) return null;
   return (
     <nav className="app-row glass" aria-label={t('apps')}>
       {rowApps(apps, row).map((a, i) => <AppKey key={a.id} app={a} onLaunch={onLaunch} onHold={() => onHold(i)} />)}
-      {apps.length < 5 && (
-        <button className="app-key all-apps" aria-label={t('all_apps')} onClick={() => { tick(); onAll(); }}><Ic.Apps size={22} /></button>
-      )}
+      <button className="app-key all-apps" aria-label={t('all_apps')} aria-haspopup="dialog" onClick={() => { tick(); onAll(); }}><Ic.Apps size={20} /></button>
     </nav>
+  );
+}
+
+// Every app on the TV, in the TV's own order, as a grid of icons with names. A tap opens it.
+export function AppsSheet({ open, onClose, apps, onLaunch }) {
+  return (
+    <Sheet open={open} onClose={onClose} title={t('all_apps')} className="apps-sheet">
+      <div className="apps-grid">
+        {(apps || []).map((a) => (
+          <button key={a.id} type="button" className="apps-cell" onClick={() => { tick(); onClose(); onLaunch(a); }}>
+            <span className="apps-pic" style={a.colour ? { '--tile': a.colour } : undefined}><AppPic app={a} /></span>
+            <span className="apps-name">{a.name}</span>
+          </button>
+        ))}
+      </div>
+    </Sheet>
   );
 }
 

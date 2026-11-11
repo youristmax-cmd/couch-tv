@@ -119,13 +119,7 @@ class Server(private val ctx: Context, port: Int) : NanoWSD(port) {
                 val t = body(s).optString("text").ifEmpty { throw ApiError(400, "text is required") }
                 Tv.text(t); json(200, ok())
             }
-            "GET /api/apps" -> {
-                val inst = Tv.installed()
-                val arr = JSONArray()
-                Apps.ALL.forEach { a -> arr.put(JSONObject().put("id", a.id).put("name", a.name).put("package", a.pkg).put("colour", a.colour)
-                    .put("installed", a.id == "home" || a.pkg in inst)) }
-                json(200, ok().put("apps", arr))
-            }
+            "GET /api/apps" -> json(200, ok().put("apps", phoneApps()))
             "POST /api/launch" -> launch(body(s).optString("app"))
             "GET /api/find" -> {
                 val title = q("title")?.trim().orEmpty().ifEmpty { throw ApiError(400, "title is required") }
@@ -290,6 +284,32 @@ class Server(private val ctx: Context, port: Int) : NanoWSD(port) {
         Thread.sleep(300)
         Now.push()
         return json(200, ok().put("volume", JSONObject(Tv.volume())))
+    }
+
+    /**
+     * The phone's apps: every app the TV home lists, in the home's own order (its dock first, then
+     * More apps, as arranged), each by its real name; then the built-in list's apps the home did
+     * not report (installed or not, and Home and Settings, as before). An app without a built-in id
+     * goes by its package, which /api/launch takes. Before the home has reported: the built-in list.
+     */
+    private fun phoneApps(): JSONArray {
+        val inst = Tv.installed()
+        val out = JSONArray(); val seen = HashSet<String>()
+        val home = appOrder().optJSONArray("apps") ?: JSONArray()
+        for (i in 0 until home.length()) {
+            val h = home.optJSONObject(i) ?: continue
+            val pkg = h.optString("package")
+            if (pkg.isEmpty() || pkg == BuildConfig.APPLICATION_ID || !seen.add(pkg)) continue
+            val known = Apps.BY_PACKAGE[pkg]
+            out.put(JSONObject().put("id", known?.id ?: pkg).put("name", h.optString("name").ifEmpty { known?.name ?: pkg })
+                .put("package", pkg).put("colour", known?.colour ?: JSONObject.NULL).put("installed", true))
+        }
+        Apps.ALL.forEach { a ->
+            if (a.id != "home" && a.pkg in seen) return@forEach
+            out.put(JSONObject().put("id", a.id).put("name", a.name).put("package", a.pkg).put("colour", a.colour)
+                .put("installed", a.id == "home" || a.pkg in inst))
+        }
+        return out
     }
 
     private fun appOrder(): JSONObject {
@@ -490,7 +510,7 @@ class Server(private val ctx: Context, port: Int) : NanoWSD(port) {
     private fun appIcon(pkg: String): Response {
         if (!Regex("[A-Za-z0-9_.]{1,200}").matches(pkg) || Tv.tvLaunchables().none { it.activityInfo.packageName == pkg })
             return json(404, err("no such app"))
-        val png = AppArt.icon(ctx, pkg) ?: return json(404, err("no icon"))
+        val png = AppArt.icon(ctx, pkg, squareOnly = true) ?: return json(404, err("no icon"))
         return newFixedLengthResponse(Response.Status.OK, "image/png", java.io.ByteArrayInputStream(png), png.size.toLong())
             .apply { addHeader("Cache-Control", "max-age=86400") }
     }

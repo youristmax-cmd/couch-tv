@@ -79,7 +79,20 @@ object FireRemote {
 
     fun key(code: String) {
         val a = ACTIONS[code] ?: throw ApiError(400, "the Fire TV remote has no $code")
-        command("/v1/FireTV?action=$a", null)
+        inLane { command("/v1/FireTV?action=$a", null) }
+    }
+
+    /**
+     * Amazon's service does one thing at a time: measured from a computer, one call answers in about
+     * 0.1 s, but six at once take 2.7 s on average and up to 5 s (they queue inside it, and a call
+     * that ran past its timeout used to be taken for "not answering"). So every call goes through
+     * one lane, in the order pressed. A press that has waited 4 s (the TV stuck) is dropped rather
+     * than sent late.
+     */
+    private val lane = java.util.concurrent.locks.ReentrantLock(true)
+    private fun <T> inLane(block: () -> T): T {
+        if (!lane.tryLock(4, java.util.concurrent.TimeUnit.SECONDS)) fail(503, "the Fire TV is busy with earlier presses. Try again in a moment.")
+        try { return block() } finally { lane.unlock() }
     }
 
     /**
@@ -88,7 +101,9 @@ object FireRemote {
      * only while a keyboard is up, so check first for a clear message, then send each character.
      * Keyboard states: "hidden", "visible" (empty box), "text" (box has text).
      */
-    fun text(s: String) {
+    fun text(s: String) = inLane { typeText(s) }
+
+    private fun typeText(s: String) {
         if (!paired) throw ApiError(503, "pair the Fire TV remote on the setup page first")
         var (st, kb) = request("GET", "/v1/FireTV/keyboard", null)
         if (st == -1) { wake(); val r = request("GET", "/v1/FireTV/keyboard", null); st = r.first; kb = r.second }
@@ -107,7 +122,10 @@ object FireRemote {
     private fun command(path: String, body: String?) {
         if (!paired) throw ApiError(503, "pair the Fire TV remote on the setup page first")
         var (st, out) = request("POST", path, body)
-        if (st == -1) {           // not listening or stuck: start it again and try once more
+        // No answer: first once more straight away (a kept-open connection the service had closed
+        // fails once and is replaced), then start the service again and try a last time.
+        if (st == -1) { val r = request("POST", path, body); st = r.first; out = r.second }
+        if (st == -1) {
             wake()
             val r = request("POST", path, body); st = r.first; out = r.second
         }
@@ -143,8 +161,13 @@ object FireRemote {
         }
     }
 
-    /** One HTTPS call to the service. Returns (-1, "") when it does not connect or answer in time. */
-    private fun request(method: String, path: String, body: String?, auth: Boolean = true, timeoutMs: Int = 5000): Pair<Int, String> {
+    /**
+     * One HTTPS call to the service, on a connection of its own (about 0.15 s on the TV). Returns
+     * (-1, "") when it does not connect or answer in time. Not kept open: the service says
+     * keep-alive, but a second call on the same connection from the TV itself is never answered
+     * (seen on Fire OS 7.6.8.5: every reused call ran into the timeout).
+     */
+    private fun request(method: String, path: String, body: String?, auth: Boolean = true, timeoutMs: Int = 2500): Pair<Int, String> {
         return try {
             val c = URL("https://$HOST:8080$path").openConnection() as HttpsURLConnection
             c.sslSocketFactory = localTls
@@ -152,6 +175,7 @@ object FireRemote {
             c.requestMethod = method
             c.connectTimeout = timeoutMs; c.readTimeout = timeoutMs
             c.setRequestProperty("x-api-key", API_KEY)
+            c.setRequestProperty("Connection", "close")
             if (auth) Store.str(TOKEN)?.let { c.setRequestProperty("x-client-token", it) }
             if (body != null) {
                 c.doOutput = true

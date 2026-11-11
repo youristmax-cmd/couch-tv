@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import * as Ic from './icons.jsx';
 import { tick } from './haptics.js';
-import { logoFor } from './appLogos.js';
+import { AppPic } from './Remote.jsx';
 import { t } from './i18n.js';
 
 // Names that fit under an icon, like the iPhone home screen.
@@ -57,7 +57,7 @@ export function Watch({ pull, people, who, recs, cont: contIn, apps, screens, se
         <div className="apps">
           {launchable(apps).map((a) => (
             <button key={a.id} className="app-tile" style={{ '--tile': a.colour || '#3a3a3c' }} onClick={() => { tick(); onLaunch(a); }}>
-              <span className="app-icon">{logoFor(a) ? <img src={logoFor(a)} alt="" /> : <span className="app-icon-name">{a.name}</span>}</span>
+              <span className="app-icon"><AppPic app={a} /></span>
               <span className="app-label">{SHORT[a.id] || a.name}</span>
             </button>
           ))}
