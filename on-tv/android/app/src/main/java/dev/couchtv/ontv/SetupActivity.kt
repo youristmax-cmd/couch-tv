@@ -87,6 +87,8 @@ class SetupActivity : Activity() {
             Adb.connected -> "connected (${Adb.route}). Keys, typing and \"what's playing\" work."
             s["state"] == "waiting_for_allow" || s["state"] == "connecting" -> "waiting. Accept \"Allow debugging?\" on the TV."
             s["state"] == "needs_pairing" -> "not set up. Pair wireless debugging from the phone setup page."
+            FireRemote.available && FireRemote.paired -> "off, but the Fire TV remote is paired: keys and typing work. (\"What's playing\" needs ADB.)"
+            FireRemote.available -> "off. Opening apps and volume still work. For keys, connect ADB or pair the Fire TV remote on the phone setup page."
             else -> "off. Opening apps and volume still work; keys need ADB." + (Adb.lastError?.let { "\n($it)" } ?: "")
         } + "   Phones paired: ${Auth.phoneCount()}"
         homeBtn.text = if (App.homeEnabled(this)) "Stop being the home screen" else "Use as home screen"

@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="en-AU" style="background:#000">
+<html lang="en-AU" style="background:#0A0E17">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, interactive-widget=resizes-content">
   <title>TV</title>
   <meta name="description" content="Phone remote for your Google TV.">
-  <meta name="theme-color" content="#000000">
+  <meta name="theme-color" content="#0A0E17">
   <meta name="color-scheme" content="dark">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
@@ -17,11 +17,11 @@
   <style>
     :root { --sat: env(safe-area-inset-top, 0px); --sar: env(safe-area-inset-right, 0px); --sab: env(safe-area-inset-bottom, 0px); --sal: env(safe-area-inset-left, 0px); }
     html { font-size: 17px; font: -apple-system-body; }
-    html, body { margin: 0; height: 100%; background: #000; color: #fff; color-scheme: dark; }
+    html, body { margin: 0; height: 100%; background: #0A0E17; color: #EEF1F7; color-scheme: dark; }
     #root { height: 100%; }
     .boot { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
       padding: 24px; text-align: center; font: 600 17px/1.35 -apple-system, system-ui, 'Helvetica Neue', sans-serif;
-      background: radial-gradient(120% 80% at 50% 0%, #1d1d24, #000 70%); -webkit-user-select: none; user-select: none; }
+      background: radial-gradient(120% 80% at 50% 0%, #1A2236, #0A0E17 70%); -webkit-user-select: none; user-select: none; }
     .boot p { margin: 0; max-width: 280px; }
     .boot small { display: block; margin-top: 6px; font-weight: 400; font-size: 15px; color: rgba(255,255,255,.7); }
     .boot-spin { width: 26px; height: 26px; border-radius: 50%; border: 2.5px solid rgba(255,255,255,.25); border-top-color: #fff; animation: boot-spin .9s linear infinite; }
@@ -120,6 +120,11 @@
       });
     })();
   </script>
+  <!-- Antonio (the clock, OK) and Inter (everything else), loaded without holding up the start: a
+       home without internet still opens at once, with the system fonts standing in. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Antonio:wght@400;600&family=Inter:wght@400;500;600&display=swap" media="print" onload="this.media='all'">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon-192.png">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">

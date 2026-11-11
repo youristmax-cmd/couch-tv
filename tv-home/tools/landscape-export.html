@@ -1,0 +1,40 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>landscape export</title>
+<!--
+Exports the landscape frames from the full-resolution originals for the TV: 1920x1080, high-quality
+resampling, a light unsharp mask (the generator's 1672 px images are scaled up ~15%), JPEG 95.
+Per-file shift (dy) for a frame the generator moved: the picture moves down by dy and the opened
+strip at the top is the sky just below it, mirrored.
+
+Run with a server that serves the repo and saves POST /save?name=<file>:
+  open http://127.0.0.1:<port>/tv-home/tools/landscape-export.html?src=/build/v2-orig/&files=frame-02.png,frame-10.png:56
+-->
+<script>
+"use strict";
+const Q = location.search, arg = (k) => decodeURIComponent((Q.match(new RegExp("[?&]" + k + "=([^&]*)")) || [])[1] || "");
+const W = 1920, H = 1080, AMOUNT = +(arg("amount") || 0.35), RADIUS = +(arg("radius") || 1.2);
+function load(u) { return new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(u); i.src = u; }); }
+async function exportOne(spec) {
+  const [file, dyS] = spec.split(":"), dy = +(dyS || 0);
+  const img = await load(arg("src") + file);
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const g = c.getContext("2d"); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
+  g.drawImage(img, 0, dy, W, H);
+  if (dy > 0) { g.save(); g.translate(0, 2 * dy); g.scale(1, -1); g.drawImage(c, 0, dy, W, dy, 0, dy, W, dy); g.restore(); }
+  // unsharp mask: sharp + AMOUNT * (sharp - blurred)
+  const b = document.createElement("canvas"); b.width = W; b.height = H;
+  const bg = b.getContext("2d"); bg.filter = "blur(" + RADIUS + "px)"; bg.drawImage(c, 0, 0);
+  const s = g.getImageData(0, 0, W, H), bl = bg.getImageData(0, 0, W, H).data, d = s.data;
+  for (let i = 0; i < d.length; i += 4) for (let k = 0; k < 3; k++) d[i + k] = d[i + k] + AMOUNT * (d[i + k] - bl[i + k]);
+  g.putImageData(s, 0, 0);
+  const out = await new Promise((ok) => c.toBlob(ok, "image/jpeg", 0.95));
+  const name = file.replace(/\.png$/, ".jpg");
+  await fetch("/save?name=" + name, { method: "POST", body: out });
+  console.log("EXPORT " + name + " " + Math.round(out.size / 1024) + " KB");
+}
+(async () => {
+  for (const f of arg("files").split(",").filter(Boolean)) await exportOne(f);
+  console.log("EXPORT DONE");
+})();
+</script>

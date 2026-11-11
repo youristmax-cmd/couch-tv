@@ -41,7 +41,7 @@ class Server(private val ctx: Context, port: Int) : NanoWSD(port) {
             uri == "/tv" -> redirect("/tv/")
             uri == "/tv/config.js" -> newFixedLengthResponse(Response.Status.OK, "application/javascript",
                 "window.COUCH_CONFIG = " + Store.publicConfig() + ";\n").noCache()
-            uri.startsWith("/tv/") -> staticOrIndex("www/tv", uri.removePrefix("/tv/"), inject = false)
+            uri.startsWith("/tv/") -> devTv(uri.removePrefix("/tv/")) ?: staticOrIndex("www/tv", uri.removePrefix("/tv/"), inject = false)
             else -> staticOrIndex("www/remote", uri.removePrefix("/"), inject = true)
         }
     } catch (e: ApiError) {
@@ -196,6 +196,29 @@ class Server(private val ctx: Context, port: Int) : NanoWSD(port) {
                 json(if (r.optBoolean("ok")) 200 else 502, r)
             }
             "POST /api/adb/disconnect" -> { Adb.disconnect(); json(200, ok()) }
+            // Fire TV: Amazon's own remote service, for when this Fire OS refuses ADB from the TV itself.
+            "GET /api/fire-remote" -> json(200, ok(JSONObject(FireRemote.status())))
+            "POST /api/fire-remote/pin" -> { FireRemote.showPin(); json(200, ok().put("note", "a PIN is on the TV")) }
+            "POST /api/fire-remote/pair" -> {
+                val pin = body(s).optString("pin").filter { it.isDigit() }.ifEmpty { throw ApiError(400, "pin is required") }
+                FireRemote.pair(pin)
+                json(200, ok(JSONObject(FireRemote.status())))
+            }
+            "POST /api/fire-remote/forget" -> { FireRemote.forget(); json(200, ok(JSONObject(FireRemote.status()))) }
+            // Live edits of the TV home without a new app: files sent here are served at /tv/ in place
+            // of the built-in ones until cleared. Each call carries one piece (base64, under 64 KB).
+            "POST /api/dev/tv-file" -> {
+                val b = body(s)
+                val f = devFile(b.optString("path")) ?: throw ApiError(400, "bad path")
+                val bytes = android.util.Base64.decode(b.optString("b64"), android.util.Base64.DEFAULT)
+                f.parentFile?.mkdirs()
+                java.io.FileOutputStream(f, b.optBoolean("append")).use { it.write(bytes) }
+                json(200, ok().put("path", b.optString("path")).put("size", f.length()))
+            }
+            "GET /api/dev/tv-files" -> json(200, ok().put("files", JSONArray(devRoot().walkTopDown().filter { it.isFile }
+                .map { it.relativeTo(devRoot()).path + " " + it.length() }.toList())))
+            "POST /api/dev/tv-clear" -> { devRoot().deleteRecursively(); HomeActivity.reloadNow(); json(200, ok()) }
+            "POST /api/dev/tv-reload" -> { HomeActivity.reloadNow(); json(200, ok()) }
             // Step-by-step handshake with every packet logged (tag couchtv.adb, "diag:"). See AdbDiag.
             "POST /api/adb/diag" -> {
                 val b = body(s)
@@ -287,6 +310,7 @@ class Server(private val ctx: Context, port: Int) : NanoWSD(port) {
         .put("people", Store.people()).put("weather", Store.weather()).put("country", Store.country()).put("tv_name", Store.tvName())
         .put("ask", JSONObject().put("enabled", Store.bool("ask_enabled")).put("has_key", !Store.str("ask_key").isNullOrEmpty()).put("model", Ask.MODEL))
         .put("phones", Auth.phoneCount()).put("port", Store.port).put("adb", JSONObject(Adb.status()))
+        .put("fire_remote", JSONObject(FireRemote.status()))
 
     /** {"people": [...]} replaces the list; {"order": [ids]} only reorders it. */
     private fun savePeople(b: JSONObject) {
@@ -409,6 +433,21 @@ class Server(private val ctx: Context, port: Int) : NanoWSD(port) {
     }
 
     private fun exists(path: String) = try { assets.open(path).close(); true } catch (e: IOException) { false }
+
+    // ---- live edits of the TV home (/api/dev/tv-*) ----
+    private fun devRoot() = java.io.File(ctx.filesDir, "tv-dev")
+    private fun devFile(rel: String): java.io.File? {
+        val clean = URLDecoder.decode(rel, "UTF-8").trimStart('/')
+        if (clean.isEmpty() || clean.contains("..") || clean.contains('\\')) return null
+        return java.io.File(devRoot(), clean)
+    }
+    /** An overlay file for /tv/<rel>, if one was sent. */
+    private fun devTv(rel: String): Response? {
+        if (!devRoot().isDirectory) return null
+        val f = devFile(if (rel.isEmpty()) "index.html" else rel.substringBefore('?')) ?: return null
+        if (!f.isFile) return null
+        return newFixedLengthResponse(Response.Status.OK, mime(f.name), java.io.FileInputStream(f), f.length()).noCache()
+    }
 
     private fun asset(path: String): Response = try {
         val stream = assets.open(path)

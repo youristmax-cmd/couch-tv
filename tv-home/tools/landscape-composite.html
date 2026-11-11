@@ -1,0 +1,33 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>landscape composite</title>
+<!--
+A regenerated frame whose city drifted: keep the new frame everywhere except the city, which comes
+from the old (aligned) frame, below the skyline, in a soft-edged box. Saves composite-<new>.
+
+  open http://127.0.0.1:<port>/tv-home/tools/landscape-composite.html?new=/build/v2s/n3.jpg&old=/tv-home/web/landscape/la-hills-v2/frame-01.jpg
+  options: box=x0,y0,x1,y1,feather (default the city: 1080,640,1920,1080,90)
+-->
+<script>
+"use strict";
+const Q = location.search, arg = (k, d) => { const m = Q.match(new RegExp("[?&]" + k + "=([^&]*)")); return m ? decodeURIComponent(m[1]) : d; };
+const W = 1920, H = 1080, [X0, Y0, X1, Y1, FE] = arg("box", "1080,640,1920,1080,90").split(",").map(Number);
+function load(u) { return new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(u); i.src = u; }); }
+function px(img) { const c = document.createElement("canvas"); c.width = W; c.height = H; const g = c.getContext("2d"); g.drawImage(img, 0, 0, W, H); return [c, g, g.getImageData(0, 0, W, H)]; }
+(async () => {
+  const [nc, ng, nd] = px(await load(arg("new"))), [, , od] = px(await load(arg("old")));
+  const [, , md] = px(await load("/tv-home/web/landscape/la-hills-v2/layers/sky-mask.png"));
+  const n = nd.data, o = od.data, m = md.data;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = (y * W + x) * 4;
+    const bx = Math.min(1, Math.max(0, (x - X0) / FE)) * (X1 >= W ? 1 : Math.min(1, Math.max(0, (X1 - x) / FE)));
+    const by = Math.min(1, Math.max(0, (y - Y0) / FE));
+    const k = bx * by * (1 - m[i] / 255);
+    if (k > 0) for (let c = 0; c < 3; c++) n[i + c] = n[i + c] * (1 - k) + o[i + c] * k;
+  }
+  ng.putImageData(nd, 0, 0);
+  const b = await new Promise((ok) => nc.toBlob(ok, "image/jpeg", 0.95));
+  await fetch("/save?name=composite-" + arg("new").split("/").pop(), { method: "POST", body: b });
+  console.log("COMP done");
+})();
+</script>

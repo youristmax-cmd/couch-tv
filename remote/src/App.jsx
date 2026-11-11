@@ -3,8 +3,8 @@ import { flushSync } from 'react-dom';
 import { api, subscribeNow, setTvId } from './api.js';
 import { tick } from './haptics.js';
 import * as Ic from './icons.jsx';
-import { TopBar, NowPlaying, Pad, Controls, AskButton } from './Remote.jsx';
-import { Watch } from './Watch.jsx';
+import { TopBar, ClockWeather, NowCard, AppRow, Pad, Controls, AskButton, WhoSheet, whoName } from './Remote.jsx';
+import { Watch, launchable } from './Watch.jsx';
 import { AskSheet, MoreSheet, ArrangeSheet, PeopleSheet, Onboarding } from './Sheets.jsx';
 import { usePullDown, usePageDrag } from './gestures.js';
 import { t, useLang, setTvLang } from './i18n.js';
@@ -148,6 +148,7 @@ export default function App() {
   const [sleepError, setSleepError] = useState(null);
   const [, setNowTick] = useState(0);
   const askInput = useRef(null);
+  const typeInput = useRef(null);
   const { w, h } = useSize();
   const wide = w >= 760 && h >= 480;
   const standalone = typeof navigator !== 'undefined' && (navigator.standalone || window.matchMedia('(display-mode: standalone)').matches);
@@ -159,8 +160,19 @@ export default function App() {
 
   useEffect(() => { setTv(null); return subscribeNow(setTv, setReach); }, [tvId]);
   useEffect(() => { api.tvs().then((d) => setTvs(d.tvs || [])).catch(() => {}); }, [reach, tvId]);
-  // "Same as the TV": the language picked in the TV home's Home settings
-  useEffect(() => { api.settings().then((d) => setTvLang(d.settings?.lang)).catch(() => {}); }, [reach, tvId]);
+  // "Same as the TV": the language picked in the TV home's Home settings. The clock (12 or 24
+  // hours) and the weather (on or off, °C or °F) follow those settings too.
+  const [tvSettings, setTvSettings] = useState(null);
+  useEffect(() => { api.settings().then((d) => { setTvLang(d.settings?.lang); setTvSettings(d.settings || null); }).catch(() => {}); }, [reach, tvId]);
+  // The home's weather, the same reading the TV home shows. None (no internet, no place): hidden.
+  const [weather, setWeather] = useState(null);
+  useEffect(() => {
+    if (reach === false) return undefined;
+    const get = () => api.weather().then(setWeather).catch(() => {});
+    get();
+    const timer = setInterval(get, 30 * 60000);
+    return () => clearInterval(timer);
+  }, [reach, tvId]);
   useEffect(() => { api.apps().then((d) => setApps(d.apps)).catch(() => setApps((a) => a || false)); api.screens().then((d) => setScreens(d.screens)).catch(() => {}); }, [reach]);
   useEffect(() => { if (tab === 'watch' && apps === false) api.apps().then((d) => setApps(d.apps)).catch(() => {}); }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
   const whoNow = useRef(who);
@@ -255,6 +267,8 @@ export default function App() {
   // iOS only raises the keyboard if focus happens inside the tap itself, and a closed sheet is inert
   // (cannot take focus), so open it synchronously, then focus, all within the same tap.
   const openAsk = () => { tick(); flushSync(() => setSheet('ask')); askInput.current?.focus({ preventScroll: true }); };
+  // The keyboard button: the TV menu with its "Type on the TV" field focused, the same way.
+  const openType = () => { tick(); flushSync(() => setSheet('more')); typeInput.current?.focus({ preventScroll: true }); };
 
   const sleepEnds = tv?.sleep?.ends;
   const sleepLeft = sleepEnds ? `${Math.max(0, Math.round((new Date(sleepEnds) - Date.now()) / 60000))}m` : null;
@@ -276,13 +290,11 @@ export default function App() {
 
   // Remote and Watch are two pages side by side; the phone's own scrolling moves between them.
   const pager = useRef(null);
-  const tabsRef = useRef(null);
   // After the Duo closes (two panes back to one), or the width changes, put the pages back on the
   // tab that is showing, so the visible page and the active tab always agree.
   useEffect(() => {
     const el = pager.current; if (wide || !el) return;
     el.scrollLeft = tab === 'watch' ? el.clientWidth : 0;
-    tabsRef.current?.style.setProperty('--p', tab === 'watch' ? '1' : '0');
   }, [wide, w]); // eslint-disable-line react-hooks/exhaustive-deps
   const goTo = (t) => {
     tick(); const el = pager.current;
@@ -292,36 +304,40 @@ export default function App() {
   };
   const onPage = (e) => {
     const el = e.currentTarget; const p = el.scrollLeft / Math.max(1, el.clientWidth);
-    tabsRef.current?.style.setProperty('--p', Math.min(1, Math.max(0, p)).toFixed(3));
     const t = p > 0.5 ? 'watch' : 'remote';
     if (t !== tab) setTab(t);
   };
-  // The pill can be dragged like the iPhone home bar, and the whole dock (Ask and the tabs) takes a
-  // sideways swipe like the pages above it, so paging works from the top of the screen to the bottom.
-  const pill = usePageDrag(pager, (t) => goTo(t), 'thumb');
+  // The dock (the Ask bar) takes a sideways swipe like the pages above it, so paging works from the
+  // top of the screen to the bottom. There are no tabs: All apps opens Watch, and Watch has a back
+  // button (and the swipe) to come back.
   const dockDrag = usePageDrag(pager, (t) => goTo(t), 'content');
-  const tabs = (
-    <nav ref={tabsRef} className="tabs glass" aria-label="Sections" {...pill}>
-      <span className="tabs-thumb" aria-hidden="true" />
-      <button className={tab === 'remote' ? 'on' : ''} aria-current={tab === 'remote'} onClick={() => goTo('remote')}><Ic.Remote size={18} /> {t('remote')}</button>
-      <button className={tab === 'watch' ? 'on' : ''} aria-current={tab === 'watch'} onClick={() => goTo('watch')}><Ic.Grid size={18} /> {t('watch')}</button>
-    </nav>
-  );
+  // All apps: the full list is the Apps section of Watch. One column: page over to it; two
+  // columns: Watch is already beside the remote, so scroll it there.
+  const onAllApps = () => {
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const sec = document.getElementById('watch-apps');
+    const box = sec?.closest('.watch');
+    if (box) box.scrollTo({ top: box.scrollTop + sec.getBoundingClientRect().top - box.getBoundingClientRect().top - 8, behavior: still ? 'auto' : 'smooth' });
+    if (!wide) goTo('watch');
+  };
+  const appInfo = appById[tv?.app?.id];
+  const nextUp = (cont === undefined ? recs?.continue : cont)?.[0] || null;
 
   const remote = (
     <div className="remote-col">
       <div className="pull-zone" {...pull}>
-      <TopBar people={people} tvName={thisTv?.name} who={who} setWho={pickWho} tv={tv} appInfo={appById[tv?.app?.id]} reach={reach} sleepLeft={sleepLeft} onPower={onPower} onMore={() => setSheet('more')} />
-      {tvId && <button className="tv-chip glass" onClick={() => { tick(); setSheet('more'); }}><Ic.Screen size={15} /> {t('this_tv', { name: thisTv?.name || t('this') })}</button>}
-      <NowPlaying tv={tv} appInfo={appById[tv?.app?.id]} onKey={onKey} roomy={h >= 760} />
+        <TopBar people={people} tvName={thisTv?.name} who={who} onWho={() => setSheet('who')} tv={tv} appInfo={appInfo} reach={reach} sleepLeft={sleepLeft} onPower={onPower} onMore={() => setSheet('more')} />
+        <ClockWeather settings={tvSettings} weather={weather} />
+        <NowCard tv={tv} appInfo={appInfo} item={nextUp} serviceName={serviceName} onKey={onKey} onResume={onPlay} />
       </div>
+      <AppRow apps={launchable(apps)} onLaunch={onLaunch} onAll={onAllApps} />
       <Pad onKey={onKey} offState={offState} wakeError={wakeError} onWake={onWake} onRetry={onRetry}
         tvName={thisTv?.name} onLivingRoom={() => { tick(); chooseTv(null); }} />
-      <Controls tv={tv} onKey={onKey} onVolume={onVolume} />
+      <Controls tv={tv} onKey={onKey} onVolume={onVolume} onType={openType} />
       {wide && askOn && <AskButton onAsk={openAsk} quiet={Boolean(offState)} />}
     </div>
   );
-  const watch = <Watch pull={pull} people={people} who={who || people[0]?.id || 'both'} recs={recs} cont={cont === undefined ? (recs === false ? false : recs?.continue) : cont} apps={apps} screens={screens} serviceName={serviceName} onPlay={onPlay} onLaunch={onLaunch} onScreen={onScreen} wide={wide} />;
+  const watch = <Watch pull={pull} people={people} who={who || people[0]?.id || 'both'} recs={recs} cont={cont === undefined ? (recs === false ? false : recs?.continue) : cont} apps={apps} screens={screens} serviceName={serviceName} onPlay={onPlay} onLaunch={onLaunch} onScreen={onScreen} wide={wide} onBack={() => goTo('remote')} />;
 
   return (
     <div className={`app ${wide ? 'is-wide' : ''} ${offState ? 'is-off' : ''}`}>
@@ -340,15 +356,18 @@ export default function App() {
           </div>
           <div className="dock" {...dockDrag}>
             {askOn && <AskButton onAsk={openAsk} quiet={Boolean(offState)} />}
-            {tabs}
           </div>
         </main>
       )}
       {toast && <div key={toast.id} className={`toast glass ${toast.kind}`} role="status">{toast.text}</div>}
-      <AskSheet ref={askInput} open={sheet === 'ask'} onClose={() => setSheet(null)} who={who} recs={recs} onAsk={onAsk} onDone={(reply) => say(reply)} />
+      <AskSheet ref={askInput} open={sheet === 'ask'} onClose={() => setSheet(null)} recs={recs} onAsk={onAsk}
+        playing={tv?.playing} serviceName={serviceName} onPlay={onPlay}
+        sleepLeft={sleepLeft} onSleepChip={() => setSheet('more')}
+        whoLabel={people.length > 0 && who ? whoName(people, who) : null} onWhoChip={() => setSheet('who')} />
+      <WhoSheet open={sheet === 'who'} onClose={() => setSheet(null)} people={people} who={who} setWho={pickWho} />
       <MoreSheet ref={moreSheet} open={sheet === 'more'} tvs={tvs} tvId={tvId || 'living-room'} onTv={(id) => { tick(); chooseTv(id); }}
         picture={tv?.picture} pictureInfo={pictureInfo} onPicture={onPicture} onClose={() => setSheet(null)} sleepEnds={sleepEnds} sleepError={sleepError} onSleep={onSleep}
-        onKey={onKey} onText={(text) => run(api.text(text), t('sent_to_tv'))} onArrange={() => setSheet('arrange')} onPeople={() => setSheet('people')} />
+        onKey={onKey} typeRef={typeInput} onText={(text) => run(api.text(text), t('sent_to_tv'))} onArrange={() => setSheet('arrange')} onPeople={() => setSheet('people')} />
       <ArrangeSheet open={sheet === 'arrange'} onClose={() => setSheet(null)} tvName={thisTv?.name} />
       <PeopleSheet open={sheet === 'people'} onClose={() => setSheet(null)} onSaved={(list) => { setPeople(list); if (who && who !== 'both' && !list.some((p) => p.id === who)) setWho(list[0]?.id || 'both'); }} />
       {!who && people.length > 0 && <Onboarding people={people} standalone={standalone} onPick={pickWho} />}

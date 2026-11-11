@@ -148,9 +148,17 @@ and the app polls the system's usage events instead. Where a Fire OS build still
 own ADB, the activity log is followed as a third option.
 
 On a Fire TV the quick buttons also gain **Input** (the TV's own HDMI picker). Some Fire OS builds
-block the TV's own ADB, and then the phone remote's keys, typing, power off and "what's playing"
-do not work; opening apps, playing a show by name, volume on the TV's own speaker and the sleep
-timer still do.
+block the TV's own ADB (seen on an Insignia F30 TV, Fire OS 7.6.8.5: adbd accepts `127.0.0.1:5555`
+and hangs up before the handshake, while a computer on the network connects fine).
+
+**Fire TV remote fallback.** On those TVs, pair the **Fire TV remote** on the setup page instead:
+press **Show a PIN on the TV**, type the 4 digit PIN, press **Pair**. Couch TV then sends the D-pad,
+OK, Back, Home, Menu, volume, typing and power off through Amazon's own remote service on the TV
+(`com.amazon.tv.turnstile`, the one the Fire TV phone app uses: DIAL start on port 8009, HTTPS on
+8080), on `127.0.0.1` only. Play, pause and skip go through Android's media keys and need no
+pairing. "What's playing" and screenshots still need ADB. The service is undocumented, so an Amazon
+update could change it. If it stops answering, restart the TV (or from a computer:
+`adb shell am force-stop com.amazon.tv.turnstile`).
 
 Confirmed on a **Fire TV Stick 4K (2nd gen, Fire OS 8.1, Android 11)** by
 [killy10o10](https://github.com/Seagey/couch-tv/issues/3), who also wrote a step-by-step setup guide:

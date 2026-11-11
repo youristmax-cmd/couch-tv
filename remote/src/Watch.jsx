@@ -21,7 +21,11 @@ function Poster({ show, sub, onPlay, dim }) {
   );
 }
 
-export function Watch({ pull, people, who, recs, cont: contIn, apps, screens, serviceName, onPlay, onLaunch, onScreen, wide }) {
+// The apps a person can open from the phone (not Settings, the home screen or Moonlight), in the
+// TV's own order. The remote's app row shows the first four of these.
+export const launchable = (apps) => (apps || []).filter((a) => a.installed !== false && !['settings', 'home', 'moonlight'].includes(a.id));
+
+export function Watch({ pull, people, who, recs, cont: contIn, apps, screens, serviceName, onPlay, onLaunch, onScreen, wide, onBack }) {
   const cont = contIn || [];
   const picks = (recs?.picks || []).filter((s) => s.playable !== false);
   const ready = (screens || []).filter((s) => s.ready);
@@ -29,7 +33,12 @@ export function Watch({ pull, people, who, recs, cont: contIn, apps, screens, se
   useEffect(() => setShowPicks(false), [who]);
   return (
     <div className={`watch ${wide ? 'wide' : ''}`}>
-      {!wide && <div className="pull-zone" {...pull}><h2 className="large-title">{t('watch')}</h2></div>}
+      {!wide && (
+        <div className="pull-zone watch-head" {...pull}>
+          {onBack && <button className="round card" aria-label={t('back_to_remote')} onClick={() => { tick(); onBack(); }}><Ic.Left size={20} /></button>}
+          <h2 className="large-title">{t('watch')}</h2>
+        </div>
+      )}
 
       <section>
         <h3>{t('keep_watching')}{who !== 'both' ? <span className="h3-who"> · {(people || []).find((p) => p.id === who)?.name || ''}</span> : null}</h3>
@@ -41,12 +50,12 @@ export function Watch({ pull, people, who, recs, cont: contIn, apps, screens, se
         ) : <p className="empty">{contIn === false ? t('couldnt_load') : contIn ? t('shows_wait') : t('loading')}</p>}
       </section>
 
-      <section>
+      <section id="watch-apps">
         <h3>{t('apps')}</h3>
         {apps === null && <p className="empty">{t('loading')}</p>}
         {apps === false && <p className="empty">{t('couldnt_load_apps')}</p>}
         <div className="apps">
-          {(apps || []).filter((a) => a.installed !== false && !['settings', 'home', 'moonlight'].includes(a.id)).map((a) => (
+          {launchable(apps).map((a) => (
             <button key={a.id} className="app-tile" style={{ '--tile': a.colour || '#3a3a3c' }} onClick={() => { tick(); onLaunch(a); }}>
               <span className="app-icon">{logoFor(a) ? <img src={logoFor(a)} alt="" /> : <span className="app-icon-name">{a.name}</span>}</span>
               <span className="app-label">{SHORT[a.id] || a.name}</span>

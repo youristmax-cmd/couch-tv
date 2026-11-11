@@ -1,0 +1,289 @@
+{
+  "name": "la-hills-v2",
+  "version": 2,
+  "size": [
+    1920,
+    1080
+  ],
+  "frames": [
+    {
+      "file": "frame-01.jpg",
+      "phase": "night",
+      "altitude": -20,
+      "period": "both",
+      "description": "Deep night, Milky Way",
+      "clouds": [
+        0,
+        [
+          150,
+          165,
+          200
+        ]
+      ],
+      "align": [
+        1,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "frame-02.jpg",
+      "phase": "astronomical-twilight",
+      "altitude": -15,
+      "period": "both",
+      "description": "Astronomical twilight",
+      "clouds": [
+        0,
+        [
+          176,
+          190,
+          218
+        ]
+      ]
+    },
+    {
+      "file": "frame-03.jpg",
+      "phase": "nautical-twilight",
+      "altitude": -9,
+      "period": "both",
+      "description": "Nautical twilight",
+      "clouds": [
+        0,
+        [
+          176,
+          190,
+          218
+        ]
+      ]
+    },
+    {
+      "file": "frame-04.jpg",
+      "phase": "blue-hour",
+      "altitude": -3,
+      "period": "both",
+      "description": "Blue hour",
+      "clouds": [
+        0,
+        [
+          176,
+          190,
+          218
+        ]
+      ]
+    },
+    {
+      "file": "frame-05.jpg",
+      "phase": "sunrise",
+      "altitude": 0,
+      "period": "am",
+      "description": "Sunrise, glow behind the right-hand mountains",
+      "clouds": [
+        0,
+        [
+          255,
+          218,
+          178
+        ]
+      ]
+    },
+    {
+      "file": "frame-06.jpg",
+      "phase": "golden-am",
+      "altitude": 10,
+      "period": "am",
+      "description": "Morning golden hour, light from the right",
+      "clouds": [
+        0.35,
+        [
+          255,
+          218,
+          178
+        ]
+      ]
+    },
+    {
+      "file": "frame-07.jpg",
+      "phase": "mid-morning",
+      "altitude": 25,
+      "period": "am",
+      "description": "Mid-morning",
+      "clouds": [
+        0.45,
+        [
+          255,
+          255,
+          255
+        ]
+      ]
+    },
+    {
+      "file": "frame-08.jpg",
+      "phase": "midday",
+      "altitude": 40,
+      "period": "both",
+      "description": "Midday (base frame)",
+      "clouds": [
+        0.45,
+        [
+          255,
+          255,
+          255
+        ]
+      ]
+    },
+    {
+      "file": "frame-11.jpg",
+      "phase": "afternoon",
+      "altitude": 25,
+      "period": "pm",
+      "description": "Mid-afternoon, light from the left",
+      "clouds": [
+        0.45,
+        [
+          255,
+          255,
+          255
+        ]
+      ]
+    },
+    {
+      "file": "frame-10.jpg",
+      "phase": "golden-pm",
+      "altitude": 10,
+      "period": "pm",
+      "description": "Evening golden hour, light from the left (painted clouds)",
+      "clouds": [
+        0,
+        [
+          255,
+          218,
+          178
+        ]
+      ]
+    },
+    {
+      "file": "frame-09.jpg",
+      "phase": "sunset",
+      "altitude": 0,
+      "period": "pm",
+      "description": "Sunset, glow behind the far-left mountains",
+      "clouds": [
+        0,
+        [
+          255,
+          218,
+          178
+        ]
+      ]
+    }
+  ],
+  "weather": {
+    "overcast": {
+      "day": "ovc-day.jpg",
+      "dusk": "ovc-dusk.jpg",
+      "night": "ovc-night.jpg"
+    },
+    "rain": {
+      "day": "rain-day.jpg",
+      "dusk": "rain-dusk.jpg",
+      "night": "rain-night.jpg",
+      "align": {
+        "rain-day.jpg": [
+          1,
+          0,
+          -1
+        ],
+        "rain-night.jpg": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    "partly": {
+      "day": "partly-day.jpg",
+      "dusk": "partly-dusk.jpg",
+      "night": "partly-night.jpg"
+    },
+    "showers": {
+      "day": [
+        "showers-day-1.jpg",
+        "showers-day-2.jpg",
+        "showers-day-3.jpg"
+      ],
+      "dusk": [
+        "showers-dusk-1.jpg",
+        "showers-dusk-2.jpg",
+        "showers-dusk-3.jpg"
+      ],
+      "night": [
+        "showers-night-1.jpg",
+        "showers-night-2.jpg"
+      ],
+      "cycle_minutes": 8,
+      "cycle_fade_seconds": 180,
+      "align": {
+        "showers-night-1.jpg": [
+          1.0009,
+          0.34,
+          -0.69
+        ],
+        "showers-night-2.jpg": [
+          1.0009,
+          0.54,
+          0.01
+        ]
+      }
+    }
+  },
+  "sun": {
+    "rise": [
+      1700,
+      "right-hand mountains"
+    ],
+    "set": [
+      150,
+      "far-left mountains"
+    ],
+    "images": {
+      "low": "layers/sun-low.jpg",
+      "day": "layers/sun-day.jpg"
+    }
+  },
+  "notes": [
+    "Relit from frame-08 (the base) with ChatGPT/Gemini, each checked with tv-home/tools/landscape-check.html: >= 95% of the scene's outline tiles within 3 px of the base.",
+    "No sun disk in any frame: sky.js draws the sun, so it moves continuously and sets behind the far-left mountains.",
+    "clouds: [opacity, tint] of the drifting cirrus/haze over each frame (0 where the frame has painted clouds).",
+    "align: [scale, x, y] small corrections measured by the checker.",
+    "Handovers are plain 10-minute cross-fades: the frames line up (checker >= 95%), so no in-between pictures.",
+    "city_evening: frame-01 with the brighter city lights of frame-02 (tv-home/tools/landscape-citylights.html), shown in the evening until 22:00, then dissolving to frame-01."
+  ],
+  "milkyway": {
+    "region": [
+      0,
+      0,
+      1920,
+      720
+    ],
+    "angle": 31,
+    "center": 0.636,
+    "half": 0.035,
+    "fade": 0.07
+  },
+  "city": false,
+  "cloud_plates": [
+    "cirrus"
+  ],
+  "dissolve_seconds": 600,
+  "city_evening": {
+    "file": "frame-01e.jpg",
+    "replaces": "frame-01.jpg",
+    "until": 22
+  },
+  "smooth_pairs": [
+    [
+      "frame-10.jpg",
+      "frame-11.jpg"
+    ]
+  ]
+}

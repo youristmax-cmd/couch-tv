@@ -162,9 +162,18 @@ object FireHome {
         }
     }
 
+    /**
+     * Stand aside for a moment: the TV's inputs live on Amazon's home (its Inputs row, which only
+     * Amazon's own apps may open as a screen of its own), so while someone picks an input the
+     * watcher lets Amazon's home stay. It is back on its own after [ms].
+     */
+    @Volatile private var pausedUntil = 0L
+    fun pauseFor(ms: Long) { pausedUntil = System.currentTimeMillis() + ms }
+
     private fun jump() {
         if (!wanted) return
         val now = System.currentTimeMillis()
+        if (now < pausedUntil) return
         if (now - lastJump < 1200) return   // one jump per press, not one per event
         lastJump = now
         App.openHome()

@@ -51,10 +51,11 @@ object Store {
         .put("people", people())
         .put("weather", weather())
         .put("tvs", JSONArray().put(JSONObject().put("id", TV_ID).put("name", tvName()).also {
-            // Only a Fire TV changes: its quick buttons gain Bluetooth and Network (its long-press
+            // Only a Fire TV changes: its quick buttons gain Network (its long-press
             // Home menu has neither) and Input (the TV's own HDMI picker).
             // Every other TV keeps the home's default buttons, exactly as before.
-            if (FireHome.isFireTv) it.put("quick", JSONArray(listOf("sleep", "bluetooth", "network", "look", "input")))
+            // (Bluetooth lives in the gear's menu: not used often enough for a button of its own.)
+            if (FireHome.isFireTv) it.put("quick", JSONArray(listOf("sleep", "network", "look", "input")))
         }))
         .put("default_tv", TV_ID)
         .put("mode", "on-tv")

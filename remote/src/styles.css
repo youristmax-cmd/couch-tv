@@ -1,23 +1,36 @@
-/* TV remote. iOS visual language: glass over the blurred artwork of what is on the TV. */
+/* TV remote. The navy remote (Nov 2026): a dark navy ground, flat navy cards with a thin rim,
+   one amber accent (OK, resume, send, the Ask bar), Antonio for the clock and OK, Inter for the rest. */
 :root {
   color-scheme: dark;
-  --ink: #fff;
-  --ink-2: rgba(255, 255, 255, 0.74);
-  --ink-3: rgba(255, 255, 255, 0.6);
-  --glass: rgba(255, 255, 255, 0.13);
-  --glass-press: rgba(255, 255, 255, 0.24);
-  --rim: rgba(255, 255, 255, 0.17);
-  --sheet: rgba(30, 30, 34, 0.52);
-  --solid: #fff;
-  --on-solid: #0b0b0d;
+  --bg: #0A0E17;
+  --card: #151B2B;
+  --card-2: #1C2336;
+  --field: #1C1F2B;
+  --line: #1F2738;
+  --line-2: #2A3348;
+  --ink: #EEF1F7;
+  --ink-2: #8E97AB;
+  --ink-3: #8E97AB;
+  --icon: #C7CEDB;
+  --accent: #F2B96B;
+  --accent-press: #DDA457;
+  --on-accent: #1A1206;
+  --ok: #5DD6A0;
+  --glass: var(--card);
+  --glass-press: #222A3F;
+  --rim: var(--line);
+  --sheet: #10141F;
+  --solid: var(--accent);
+  --on-solid: var(--on-accent);
   --err: #ff6961;
-  --gap: 12px;
-  --side: 18px;
-  --ctl: 56px;
-  --ask-h: 62px;
+  --gap: 18px;
+  --side: 20px;
+  --ctl: 52px;
+  --ask-h: 54px;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --font: -apple-system, 'SF Pro Text', system-ui, 'Helvetica Neue', sans-serif;
-  --font-d: -apple-system, 'SF Pro Display', system-ui, 'Helvetica Neue', sans-serif;
+  --font: 'Inter', -apple-system, 'SF Pro Text', system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --font-d: var(--font);
+  --font-num: 'Antonio', 'Arial Narrow', 'Roboto Condensed', 'Helvetica Neue', var(--font);
   /* Safe areas, every edge. --sat..--sal can be overridden by the ?insets= test hook; --guard-t is
      set by the start-up script when an iPhone reports no insets at all (camera guard, 59 points). */
   --sat: env(safe-area-inset-top, 0px); --sar: env(safe-area-inset-right, 0px);
@@ -27,40 +40,36 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 html, body, #root { height: 100%; }
-html { background: #000; }
+html { background: var(--bg); }
 body {
-  background: #000; color: var(--ink); font: 400 16px/1.3 var(--font);
+  background: var(--bg); color: var(--ink); font: 400 16px/1.3 var(--font);
   -webkit-font-smoothing: antialiased; overscroll-behavior: none; overflow: hidden;
   -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
 }
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; touch-action: manipulation; }
 input { font: inherit; color: inherit; -webkit-user-select: text; user-select: text; }
-::selection { background: rgba(255, 255, 255, 0.3); }
-input::placeholder { color: var(--ink-3); }
-:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.85); outline-offset: 2px; }
+::selection { background: rgba(242, 185, 107, 0.35); }
+input::placeholder { color: var(--ink-2); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 button:disabled { opacity: 0.4; }
 
-/* Glass: the one material. */
-.glass {
-  background: var(--glass);
-  border: 1px solid var(--rim);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 6px 20px rgba(0, 0, 0, 0.22);
-  -webkit-backdrop-filter: blur(28px) saturate(1.7);
-  backdrop-filter: blur(28px) saturate(1.7);
-}
-button.glass:active, .seg button:active, .volume button:active { background: var(--glass-press); transition: none; }
-.solid { background: var(--solid); color: var(--on-solid); }
-button.solid:active { background: #d9d9de; }
+/* The materials: flat cards with a thin rim, and the amber accent. ("glass" is the old name, kept
+   so the sheets and Watch pick up the cards without each being renamed.) */
+.glass, .card { background: var(--card); border: 1px solid var(--line); }
+.card-2 { background: var(--card-2); border: 1px solid var(--line-2); }
+button.glass:active, button.card:active, button.card-2:active { background: var(--glass-press); transition: none; }
+.solid, .accent { background: var(--accent); color: var(--on-accent); border: 0; }
+button.solid:active, button.accent:active { background: var(--accent-press); }
 
-/* Backdrop */
-.backdrop { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; background: #050506; }
+/* Backdrop: the navy ground, with only a faint wash of what is on the TV. */
+.backdrop { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; background: var(--bg); }
 .bd-layer {
   position: absolute; inset: -80px; background-size: cover; background-position: center;
-  filter: blur(48px) saturate(1.5) brightness(0.5); opacity: 0; transition: opacity 0.9s var(--ease);
+  filter: blur(60px) saturate(1.3) brightness(0.55); opacity: 0; transition: opacity 0.9s var(--ease);
 }
-.bd-layer.top { opacity: 1; }
-.bd-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0.05) 30%, rgba(0, 0, 0, 0.42)); }
-.backdrop.off .bd-layer { filter: none; }
+.bd-layer.top { opacity: 0.32; }
+.bd-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10, 14, 23, 0.35), rgba(10, 14, 23, 0.85) 40%, var(--bg) 75%); }
+.backdrop.off .bd-layer { filter: none; opacity: 0; }
 
 .app { position: relative; z-index: 1; height: 100%; }
 main { position: relative; z-index: 1; height: 100%; }
@@ -68,115 +77,130 @@ main { position: relative; z-index: 1; height: 100%; }
 /* Single column (normal iPhone, Duo cover screen) */
 .remote-col {
   height: 100%; display: flex; flex-direction: column; gap: var(--gap);
-  padding: calc(var(--sa-t) + 10px) var(--side) calc(var(--sa-b) + 10px);
-  max-width: 560px; margin: 0 auto; container: remote / inline-size;
+  padding: calc(var(--sa-t) + 12px) var(--side) calc(var(--sa-b) + 10px);
+  max-width: 560px; margin: 0 auto;
 }
+.pull-zone { display: flex; flex-direction: column; gap: var(--gap); touch-action: pan-x; }
 
-/* Top bar */
-.topbar { display: flex; align-items: center; gap: 8px; min-height: 44px; }
-.seg { display: flex; padding: 2px; border-radius: 22px; flex: none; }
-.seg button { height: 44px; padding: 0 12px; border-radius: 20px; font-weight: 600; font-size: 15px; color: var(--ink-2); transition: background 0.2s var(--ease), color 0.2s; }
-.seg button.on { background: rgba(255, 255, 255, 0.26); color: var(--ink); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2); }
-.tvname { flex: 1; min-width: 0; text-align: right; line-height: 1.2; padding-right: 2px; }
-.tvname b { display: block; font-weight: 600; font-size: 15px; white-space: nowrap; }
-/* Narrow remote columns (phones, the Duo opened): the switch takes the room. The bar shows only
-   states (Off, Waking, Home screen, sleep timer); what is playing lives in the now playing row. */
-@container remote (max-width: 479px) {
-  .tvname b { display: none; }
-  .tvname span { font-size: 14px; font-weight: 600; color: var(--ink); }
-  .tvname.is-app span { visibility: hidden; }
-}
-.tvname span { display: block; font-size: 13px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tvname svg { vertical-align: -1px; }
 .round { position: relative; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; flex: none; }
 /* 44 points to see, 48 to hit (Apple's minimum, and Android's 48 dp). */
 .round::after { content: ''; position: absolute; inset: -2px; border-radius: 50%; }
 .round.small { width: 44px; height: 44px; }
 .round.big { width: var(--ctl); height: var(--ctl); }
+.round.card { border-color: var(--line-2); color: var(--ink); }
+
+/* Top bar: the TV's name with a status dot, then who is watching, the TV menu and power. */
+.topbar { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.tvname { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; }
+.status-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: #5A6378; }
+.status-dot.on { background: var(--ok); }
+.status-dot.waking { background: var(--accent); animation: pulse 1.6s infinite var(--ease); }
+.status-dot.err { background: var(--err); }
+.tvname-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tvname-text b { font-size: 15px; font-weight: 600; letter-spacing: 0.2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tvname-text > span { font-size: 12px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tvname svg { vertical-align: -1px; }
 .power.is-on { color: var(--ink); }
 
-.tv-chip { align-self: center; height: 44px; padding: 0 16px; border-radius: 20px; display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; }
+/* The clock and the weather */
+.clock-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 2px 4px 0; }
+.clock { font: 400 84px/0.9 var(--font-num); letter-spacing: -1px; color: #fff; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.clock small { margin-left: 6px; font: 500 15px/1 var(--font); letter-spacing: 0; color: var(--ink-2); }
+.weather { min-width: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; padding-bottom: 6px; text-align: right; }
+.weather-temp { font-size: 22px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.weather-sub { max-width: 100%; font-size: 12px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* Now playing: show, where it is up to, and the playback buttons. Folds to one line on short screens. */
-.now { display: flex; flex-direction: column; gap: 10px; }
+/* Now playing / Keep watching: one card. */
+.now.card { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px 12px 12px; border-radius: 20px; }
 .now-head { display: flex; align-items: center; gap: 14px; }
-.now-art { flex: none; width: 58px; height: 86px; border-radius: 10px; overflow: hidden; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45); }
+.now-art { flex: none; width: 56px; height: 76px; border-radius: 10px; overflow: hidden; background: #243049; display: grid; place-items: center; }
 .now-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.art-app { width: 100%; height: 100%; display: grid; place-items: center; padding: 3px; text-align: center; overflow-wrap: anywhere; font: 700 11px/1.15 var(--font); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); border-radius: inherit; }
-.now-text { flex: 1; min-width: 0; }
-.now-title { display: -webkit-box; font: 700 22px/1.14 var(--font-d); letter-spacing: -0.01em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; text-wrap: balance; }
-.now-sub { display: block; color: var(--ink-2); font-size: 15px; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.now-chev-btn { flex: none; width: 44px; height: 44px; color: var(--ink-2); }
+.now-art:has(.art-logo) { height: 56px; border-radius: 22.5%; }
+.art-logo { width: 100%; height: 100%; display: block; }
+.art-app { width: 100%; height: 100%; display: grid; place-items: center; padding: 4px; text-align: center; overflow-wrap: anywhere; overflow: hidden; font: 600 10px/1.15 var(--font); color: var(--ink-2); }
+.now-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.now-label { font-size: 11px; font-weight: 600; letter-spacing: 1.2px; text-transform: uppercase; color: var(--accent); }
+.now-title { font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.now-sub { font-size: 12px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.resume { width: 48px; height: 48px; }
+.now-chev-btn { color: var(--icon); }
 .now-chev { transform: rotate(180deg); transition: transform 0.3s var(--ease); }
 .now.open .now-chev { transform: none; }
-.scrub { padding: 0 2px; }
-.scrub-track { position: relative; height: 14px; display: flex; align-items: center; }
-.scrub-track::before { content: ''; position: absolute; left: 0; right: 0; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.22); }
-.scrub-fill { position: relative; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.92); }
-.scrub-times { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; color: var(--ink-3); font-variant-numeric: tabular-nums; margin-top: -2px; }
-.now-ep { display: block; color: var(--ink-3); font-size: 14px; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.scrub-app { color: var(--ink-3); }
-.scrub-elapsed { display: flex; align-items: center; gap: 10px; padding: 0 2px; font-size: 13px; font-weight: 600; color: var(--ink-2); font-variant-numeric: tabular-nums; }
-.scrub-clock { color: var(--ink); font-size: 15px; }
-.scrub-state::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; background: currentColor; vertical-align: 1px; opacity: 0.8; }
-.scrub-state.playing::before { animation: pulse 2s infinite var(--ease); }
-.transport { display: flex; align-items: center; justify-content: space-between; }
-.transport .round { width: 50px; height: 50px; }
+.scrub-track { height: 4px; margin: 0 2px; border-radius: 2px; overflow: hidden; background: var(--line-2); }
+.scrub-fill { height: 100%; border-radius: 2px; background: var(--accent); }
+.transport { display: flex; align-items: center; justify-content: space-between; color: var(--icon); }
+.transport .round { width: 48px; height: 48px; }
 
-/* Swipe pad */
-.pad {
-  position: relative; flex: 1; min-height: 180px; border-radius: 34px; overflow: hidden;
-  touch-action: none; display: grid; place-items: center; container-type: size;
+/* The app row: four apps and All apps */
+.app-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; flex: none; }
+.app-key { height: 56px; min-width: 0; border-radius: 16px; display: grid; place-items: center; padding: 0 4px; overflow: hidden; color: var(--ink-2); }
+.app-key img { width: 36px; height: 36px; border-radius: 9px; object-fit: cover; display: block; }
+/* An app with no icon: its name, underlined in the app's own colour (a tile colour, often too dark for text). */
+.app-word { max-width: 100%; padding-bottom: 2px; border-bottom: 2px solid var(--brand, var(--line-2)); font: 600 15px/1.05 var(--font-num); color: var(--ink); text-align: center; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* The round D-pad (also a swipe pad), amber OK in the middle */
+.pad-zone { flex: 1; min-height: 150px; display: grid; place-items: center; container-type: size; }
+.pad { position: relative; width: min(236px, 100cqmin); aspect-ratio: 1; border-radius: 50%; overflow: hidden; touch-action: none; }
+.pad-dir { position: absolute; width: 33.34%; height: 33.34%; display: flex; color: var(--icon); touch-action: none; }
+.pad-dir.up { top: 0; left: 33.33%; align-items: flex-start; justify-content: center; padding-top: 16px; }
+.pad-dir.down { bottom: 0; left: 33.33%; align-items: flex-end; justify-content: center; padding-bottom: 16px; }
+.pad-dir.left { left: 0; top: 33.33%; align-items: center; justify-content: flex-start; padding-left: 16px; }
+.pad-dir.right { right: 0; top: 33.33%; align-items: center; justify-content: flex-end; padding-right: 16px; }
+.pad-dir .chev { transition: color 0.35s, transform 0.35s var(--ease); }
+.pad-dir.down .chev { transform: rotate(180deg); }
+.pad-dir.left .chev { transform: rotate(-90deg); }
+.pad-dir.right .chev { transform: rotate(90deg); }
+.pad-dir.lit .chev { color: #fff; transition: none; }
+.pad-dir.up.lit .chev { transform: translateY(-3px); }
+.pad-dir.down.lit .chev { transform: rotate(180deg) translateY(-3px); }
+.pad-dir.left.lit .chev { transform: rotate(-90deg) translateY(-3px); }
+.pad-dir.right.lit .chev { transform: rotate(90deg) translateY(-3px); }
+.pad-ok {
+  position: absolute; left: 50%; top: 50%; width: 35.6%; aspect-ratio: 1; border-radius: 50%; transform: translate(-50%, -50%);
+  font: 600 22px/1 var(--font-num); letter-spacing: 1px; touch-action: none; transition: transform 0.35s var(--ease), background 0.35s;
 }
-@container (max-height: 330px) { .pad .hint { display: none; } }
-.pad .chev { position: absolute; width: 24px; height: 24px; color: var(--ink); opacity: 0.38; transition: opacity 0.35s, transform 0.35s var(--ease); }
-.pad .chev.up { top: 16px; }
-.pad .chev.down { bottom: 16px; transform: rotate(180deg); }
-.pad .chev.left { left: 16px; transform: rotate(-90deg); }
-.pad .chev.right { right: 16px; transform: rotate(90deg); }
-.pad .chev.lit { opacity: 1; transition: none; }
-.pad .chev.up.lit { transform: translateY(-3px); }
-.pad .chev.down.lit { transform: rotate(180deg) translateY(-3px); }
-.pad .chev.left.lit { transform: rotate(-90deg) translateY(-3px); }
-.pad .chev.right.lit { transform: rotate(90deg) translateY(-3px); }
-.pad .ring { width: 92px; height: 92px; border-radius: 50%; border: 1.5px solid rgba(255, 255, 255, 0.24); transition: background 0.35s, transform 0.35s var(--ease); }
-.pad .ring.lit { background: rgba(255, 255, 255, 0.16); transform: scale(0.94); transition: none; }
+.pad-ok.lit { transform: translate(-50%, -50%) scale(0.94); background: var(--accent-press); transition: none; }
 .pad .spot {
   position: absolute; left: -70px; top: -70px; width: 140px; height: 140px; border-radius: 50%; pointer-events: none;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 68%);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0) 68%);
 }
-.pad .hint { position: absolute; top: calc(50% + 62px); font-size: 13px; color: var(--ink-3); pointer-events: none; white-space: nowrap; }
-.pad.is-off .chev, .pad.is-off .ring { opacity: 0; }
-.app.is-off .controls { opacity: 0.4; pointer-events: none; }
-.app.is-off .vol-mid span { visibility: hidden; }
-.pad .wake:disabled { opacity: 1; }
-.spinner { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.3); border-top-color: #fff; animation: spin 0.9s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-.pad-msg { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; text-align: center; }
+.pad-msg { width: 100%; max-width: 340px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; border-radius: 24px; text-align: center; }
 .pad-msg p { font-size: 15px; color: var(--ink-2); max-width: 270px; text-wrap: balance; }
 .pad-msg p b { color: var(--ink); }
 .pad-msg .pill { flex: none; padding: 0 24px; }
 .wake-err { color: #ffb4ae !important; }
-.spinner.dark { border-color: rgba(0, 0, 0, 0.2); border-top-color: #111; }
-.pad .wake { position: relative; height: 52px; padding: 0 22px; border-radius: 26px; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 17px; }
+.wake { position: relative; height: 52px; padding: 0 22px; border-radius: 26px; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 17px; }
+.wake:disabled { opacity: 1; }
+.spinner { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.3); border-top-color: #fff; animation: spin 0.9s linear infinite; }
+.spinner.dark { border-color: rgba(26, 18, 6, 0.25); border-top-color: var(--on-accent); }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-/* Bottom controls */
-.controls { display: flex; gap: 10px; align-items: center; }
-.volume { flex: 1; height: var(--ctl); border-radius: calc(var(--ctl) / 2); display: flex; align-items: stretch; overflow: hidden; }
-.volume button { width: 48px; display: grid; place-items: center; flex: none; touch-action: pan-x; }
-.volume .vol-mid { flex: 1; width: auto; display: flex; align-items: center; justify-content: center; gap: 6px; font-weight: 600; font-size: 16px; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+/* Under the pad: back, home, play or pause, keyboard; then the volume pill and mute. */
+.controls { display: flex; flex-direction: column; gap: 10px; flex: none; }
+.key-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.key { height: var(--ctl); min-width: 0; border-radius: 16px; display: grid; place-items: center; color: var(--icon); }
+.vol-row { display: flex; align-items: center; gap: 10px; }
+.volume { flex: 1; min-width: 0; height: var(--ctl); border-radius: 16px; display: flex; align-items: center; justify-content: space-between; padding: 0 6px; }
+.volume button { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; flex: none; color: var(--icon); touch-action: pan-x; }
+.volume button:active { background: var(--card-2); transition: none; }
+.vol-mid { min-width: 0; display: flex; align-items: center; gap: 8px; color: var(--ink-2); font-size: 12px; font-weight: 500; letter-spacing: 1px; font-variant-numeric: tabular-nums; text-transform: uppercase; white-space: nowrap; }
+.mute { width: var(--ctl); flex: none; }
+.mute.on { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+.app.is-off .controls { opacity: 0.4; pointer-events: none; }
+.app.is-off .vol-mid span { visibility: hidden; }
+
+/* The Ask bar: reads like a field, opens the Ask screen. */
 .ask {
-  height: var(--ask-h); border-radius: calc(var(--ask-h) / 2); background: #e4e4e8; color: var(--on-solid);
-  display: flex; align-items: center; justify-content: center; gap: 10px; font: 600 17px/1 var(--font); flex: none;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); transition: transform 0.2s var(--ease);
+  width: 100%; height: var(--ask-h); flex: none; display: flex; align-items: center; gap: 10px; padding: 0 16px;
+  border-radius: 18px; background: var(--field); border: 1px solid var(--accent); color: var(--ink); text-align: left;
+  transition: transform 0.2s var(--ease);
 }
-.ask:active { transform: scale(0.97); background: #cfcfd4; transition: none; }
-.ask.quiet { background: var(--glass); color: var(--ink); border: 1px solid var(--rim); box-shadow: none; -webkit-backdrop-filter: blur(28px) saturate(1.7); backdrop-filter: blur(28px) saturate(1.7); }
-/* The tab thumb rides the page scroll (--p goes 0 to 1 as you swipe), like iOS page indicators. */
-.tabs { touch-action: none; position: relative; display: grid; grid-template-columns: 1fr 1fr; align-self: center; padding: 3px; border-radius: 24px; flex: none; }
-.tabs-thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); border-radius: 21px; background: rgba(255, 255, 255, 0.2); transform: translateX(calc(var(--p, 0) * 100%)); will-change: transform; }
-.tabs button { position: relative; height: 44px; padding: 0 20px; border-radius: 21px; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--ink-2); transition: color 0.2s; }
-.tabs button.on { color: var(--ink); }
+.ask:active { transform: scale(0.98); background: #232838; transition: none; }
+.ask-spark { flex: none; color: var(--accent); }
+.ask-hint { flex: 1; min-width: 0; font-size: 15px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ask-tag { flex: none; font-size: 11px; font-weight: 600; letter-spacing: 1.2px; text-transform: uppercase; color: var(--accent); }
+.ask.quiet { border-color: var(--line-2); }
+.ask.quiet .ask-spark, .ask.quiet .ask-tag { color: var(--ink-2); }
 
 /* Watch */
 .watch-page { height: 100%; display: flex; flex-direction: column; }
@@ -233,7 +257,6 @@ main.single { display: flex; flex-direction: column; padding-left: var(--sa-l); 
 /* The dock sits outside the pages, so it pages them itself (usePageDrag): touch-action none keeps
    the finger with it, and taps still press Ask and the tabs. */
 .dock { flex: none; display: flex; flex-direction: column; gap: var(--gap); padding: 8px var(--side) calc(var(--sa-b) + 10px); max-width: 560px; width: 100%; margin: 0 auto; touch-action: none; }
-.pull-zone { display: flex; flex-direction: column; gap: var(--gap); touch-action: pan-x; }
 
 /* Two columns: iPhone Duo inner screen, iPad, landscape */
 .split { display: flex; height: 100%; padding-left: var(--sa-l); padding-right: var(--sa-r); }
@@ -263,15 +286,13 @@ main.single { display: flex; flex-direction: column; padding-left: var(--sa-l); 
 /* Sheets */
 .sheet-layer { position: fixed; inset: 0; z-index: 50; pointer-events: none; }
 .sheet-layer.open { pointer-events: auto; }
-.scrim { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.4); opacity: 0; transition: opacity 0.3s; }
+.scrim { position: absolute; inset: 0; background: rgba(5, 7, 12, 0.6); opacity: 0; transition: opacity 0.3s; }
 .sheet-layer.open .scrim { opacity: 1; }
 .sheet {
   position: absolute; left: var(--sa-l); right: var(--sa-r); bottom: 0; max-width: 560px; margin: 0 auto;
   max-height: min(88%, calc(100% - var(--kb, 0px) - var(--sa-t) - 8px)); overflow-y: auto;
   overscroll-behavior: contain; padding: 8px var(--side) calc(var(--sa-b) + 18px); border-radius: 30px 30px 0 0;
-  background: var(--sheet); border-top: 1px solid var(--rim);
-  -webkit-backdrop-filter: blur(44px) saturate(1.9); backdrop-filter: blur(44px) saturate(1.9);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  background: var(--sheet); border-top: 1px solid var(--line);
   transform: translateY(105%); transition: transform 0.42s var(--ease);
 }
 .sheet-layer.open .sheet { transform: none; }
@@ -288,24 +309,24 @@ main.single { display: flex; flex-direction: column; padding-left: var(--sa-l); 
 .more-sheet { min-height: 64%; display: flex; flex-direction: column; }
 .more-sheet .more-block.first { margin-top: auto; }
 .grabber-zone .grabber { margin: 0 auto; }
-.grabber { width: 40px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.28); margin: 0 auto 10px; }
+.grabber { width: 40px; height: 5px; border-radius: 3px; background: var(--line-2); margin: 0 auto 10px; }
 .sheet-head { display: flex; align-items: center; margin-bottom: 14px; }
 .sheet-head h2 { flex: 1; font: 700 22px/1.2 var(--font-d); letter-spacing: -0.01em; }
-.ask-field { display: flex; align-items: center; gap: 8px; height: 56px; border-radius: 28px; padding: 0 8px 0 20px; }
+.ask-field { display: flex; align-items: center; gap: 8px; height: 56px; border-radius: 18px; padding: 0 8px 0 18px; }
 /* Inside a sheet the sheet is the material: controls are plain fills, never glass on glass. */
-.sheet .glass { background: rgba(255, 255, 255, 0.1); border-color: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
-.sheet button.glass:active { background: rgba(255, 255, 255, 0.2); }
+.sheet .glass { background: var(--card); border-color: var(--line); }
+.sheet button.glass:active { background: var(--glass-press); }
 .ask-field.is-hidden { position: absolute; top: 0; left: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; overflow: hidden; padding: 0; border: 0; }
 .ask-field input { flex: 1; min-width: 0; background: none; border: 0; outline: 0; font-size: 17px; }
 .ask-field .solid.listening { background: var(--err); color: #fff; }
 .tip { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); margin: 10px 4px 0; }
 .ideas { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 .chip { min-height: 44px; padding: 0 14px; border-radius: 20px; font-size: 15px; font-weight: 500; }
-.chip.on { background: var(--solid); color: var(--on-solid); }
+.chip.on { background: var(--solid); color: var(--on-solid); border-color: transparent; }
 .thinking, .answer { padding: 8px 2px 4px; }
 .said { font: 600 20px/1.3 var(--font-d); color: var(--ink-2); }
 .dots { display: flex; gap: 8px; margin: 26px 0 18px; }
-.dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--ink); animation: pulse 1.2s infinite var(--ease); }
+.dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); animation: pulse 1.2s infinite var(--ease); }
 .dots i:nth-child(2) { animation-delay: 0.15s; }
 .dots i:nth-child(3) { animation-delay: 0.3s; }
 @keyframes pulse { 0%, 100% { opacity: 0.25; transform: scale(0.8); } 40% { opacity: 1; transform: none; } }
@@ -331,7 +352,7 @@ main.single { display: flex; flex-direction: column; padding-left: var(--sa-l); 
 .onboard {
   position: fixed; inset: 0; z-index: 60; display: grid; place-items: center;
   padding: calc(var(--sa-t) + 24px) calc(var(--sa-r) + 24px) calc(var(--sa-b) + 24px) calc(var(--sa-l) + 24px);
-  background: radial-gradient(120% 80% at 50% 0%, #2b2b36, #050506 70%);
+  background: radial-gradient(120% 80% at 50% 0%, #1A2236, var(--bg) 70%);
 }
 .onboard-inner { width: 100%; max-width: 380px; text-align: center; }
 .onboard-icon { width: 84px; height: 84px; border-radius: 20px; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5); }
@@ -340,23 +361,33 @@ main.single { display: flex; flex-direction: column; padding-left: var(--sa-l); 
 .onboard-pick { display: flex; gap: 12px; margin-top: 28px; }
 .install { margin-top: 28px; padding: 14px 16px; border-radius: 18px; text-align: left; font-size: 15px; line-height: 1.4; display: grid; gap: 4px; }
 
-/* Shorter screens: Duo cover screen, Safari with its bars, small iPhones */
-@media (max-height: 720px) {
-  :root { --gap: 10px; --ctl: 52px; --ask-h: 56px; }
-  .now-art { width: 46px; height: 68px; border-radius: 8px; }
-  .now-title { font-size: 20px; -webkit-line-clamp: 1; }
+/* Shorter screens: Duo cover screen, Safari with its bars, small iPhones. The pad shrinks first
+   (it fills what is left), then the gaps and the clock, then the clock goes. */
+@media (max-height: 860px) {
+  :root { --gap: 14px; }
+  .clock { font-size: 72px; }
 }
-@media (max-height: 600px) {
-  :root { --gap: 8px; --ctl: 48px; --ask-h: 52px; }
+@media (max-height: 760px) {
+  :root { --gap: 12px; --ctl: 48px; --ask-h: 50px; }
+  .clock { font-size: 56px; }
+  .weather-temp { font-size: 19px; }
+  .now.card { padding: 10px 12px 10px 10px; }
+  .now-art { width: 44px; height: 60px; border-radius: 8px; }
+  .now-art:has(.art-logo) { height: 44px; }
+  .app-key { height: 50px; }
+}
+@media (max-height: 660px) {
+  :root { --gap: 10px; }
+  .clock-row { display: none; }
+}
+@media (max-height: 580px) {
   .now-art { display: none; }
-  .pad { min-height: 150px; border-radius: 28px; }
-  .pad .hint { display: none; }
+  .pad-zone { min-height: 130px; }
 }
 @media (max-width: 360px) {
-  :root { --side: 14px; --ctl: 52px; }
-  .seg button { padding: 0 9px; font-size: 14px; }
-  .volume button { width: 44px; }
-  .controls { gap: 8px; }
+  :root { --side: 14px; }
+  .app-row, .key-row, .vol-row { gap: 8px; }
+  .clock { font-size: 60px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -424,19 +455,18 @@ main.single { display: flex; flex-direction: column; padding-left: var(--sa-l); 
 
 /* Increase Contrast and Reduce Transparency (iOS and Android accessibility settings). */
 @media (prefers-contrast: more) {
-  :root { --ink-2: rgba(255, 255, 255, 0.9); --ink-3: rgba(255, 255, 255, 0.8); --rim: rgba(255, 255, 255, 0.45); --glass: rgba(255, 255, 255, 0.2); }
+  :root { --ink-2: #C3CADA; --ink-3: #B3BBCC; --icon: #E3E8F1; --line: #46516B; --line-2: #56627F; --rim: var(--line); }
 }
 @media (prefers-reduced-transparency: reduce) {
-  :root { --glass: rgba(58, 58, 64, 0.96); --sheet: rgba(28, 28, 32, 0.98); }
-  .glass, .sheet { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .bd-layer.top { opacity: 0; }
 }
 
 /* Who's watching with 4 or more names: one round avatar button that opens a short list. */
 .who-btn { padding: 0; }
-.who-dot { width: 34px; height: 34px; font-size: 16px; }
+.who-dot { width: 30px; height: 30px; font-size: 14px; box-shadow: none; }
 .who-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 4px 12px 4px 8px; border-radius: 16px; text-align: left; color: var(--ink); }
-.who-row:active { background: rgba(255, 255, 255, 0.14); }
-.who-row.on { background: rgba(255, 255, 255, 0.1); }
+.who-row:active { background: var(--glass-press); }
+.who-row.on { background: var(--card); }
 .who-name { flex: 1; min-width: 0; font-weight: 600; font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .who-tick { flex: none; color: var(--ink-2); font-size: 18px; }
 
@@ -454,7 +484,7 @@ main.single { display: flex; flex-direction: column; padding-left: var(--sa-l); 
   display: flex; align-items: center; justify-content: space-between; gap: 12px; background: rgba(255, 255, 255, 0.14); font-size: 15px; font-weight: 600; }
 .autosend b { color: var(--ink-2); font-weight: 600; }
 .autosend span, .autosend b { position: relative; }
-.autosend-bar { position: absolute !important; left: 0; top: 0; bottom: 0; width: 100%; background: rgba(255, 255, 255, 0.16); transform-origin: left; animation: autosend 2s linear forwards; }
+.autosend-bar { position: absolute !important; left: 0; top: 0; bottom: 0; width: 100%; background: rgba(242, 185, 107, 0.22); transform-origin: left; animation: autosend 2s linear forwards; }
 @keyframes autosend { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 
 /* Ask as a conversation (Round 10, 27 Oct). Modelled on Messages and Siri: his words in a soft
@@ -491,3 +521,69 @@ main.single { display: flex; flex-direction: column; padding-left: var(--sa-l); 
 .kb-open .ask-sheet .replies { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-right: -4px; }
 .kb-open .ask-sheet .replies::-webkit-scrollbar { display: none; }
 .kb-open .ask-sheet .replies .reply-chip { flex: none; white-space: nowrap; }
+
+/* Watch's title row: a back button to the remote (there are no tabs), then the title. */
+.watch-head { flex-direction: row; align-items: center; gap: 12px; padding: 0 var(--side); }
+.watch-head .large-title { padding: 0; margin: 0; }
+.watch .app-icon { box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.14); }
+.poster-art { background: var(--card); box-shadow: none; border: 1px solid var(--line); }
+.row-btn.cell { background: var(--card); border: 1px solid var(--line); }
+.row-btn.cell:active { background: var(--glass-press); }
+.row-icon { background: var(--card-2); color: var(--icon); }
+
+/* The Ask screen (Nov 2026): a full screen over the remote. Back button and title at the top, the
+   conversation (his words in amber on the right, Claude's in a card on the left, with the show it
+   is about), suggestion chips, shortcuts (sleep timer, who's watching) and the field at the bottom. */
+.sheet.ask-sheet {
+  top: 0; bottom: 0; max-height: none; border-radius: 0; border: 0; background: var(--bg);
+  padding: calc(var(--sa-t) + 12px) var(--side) calc(var(--sa-b) + 14px);
+  display: flex; flex-direction: column; gap: 14px; overflow: hidden;
+}
+.kb-open .sheet-layer.open .sheet.ask-sheet { padding-bottom: 12px; }
+.ask-head { flex: none; display: flex; align-items: center; gap: 12px; }
+.ask-head-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ask-head-text h2 { font: 600 15px/1.25 var(--font); }
+.ask-head-text span { font-size: 12px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ask-sheet .new-chat { flex: none; height: 44px; padding: 0 16px; border-radius: 22px; font-size: 14px; font-weight: 500; }
+.ask-sheet .thread { gap: 14px; padding: 8px 2px 6px; }
+.bubble { font-size: calc(15px * var(--dt, 1)); line-height: 1.45; }
+.bubble.me {
+  max-width: min(280px, 82%); padding: 12px 16px; border-radius: 20px 20px 4px 20px;
+  background: var(--accent); color: var(--on-accent); box-shadow: none; line-height: 1.4;
+}
+.bubble.claude, .bubble.pending {
+  align-self: flex-start; max-width: min(320px, 90%); padding: 14px 16px; border-radius: 20px 20px 20px 4px;
+  background: var(--card); border: 1px solid var(--line); font-weight: 400; color: var(--ink);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.bubble.claude small, .bubble.pending small { margin-top: 0; }
+.bubble.err { color: #ffb4ae; }
+.bubble.pending { gap: 4px; }
+.show-card { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 14px; background: #0F131E; color: var(--ink); }
+.show-art { flex: none; width: 44px; height: 60px; border-radius: 8px; overflow: hidden; background: #243049; }
+.show-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.show-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.show-text b { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.bubble .show-text small { font-size: 12px; color: var(--ink-2); }
+.show-play { width: 40px; height: 40px; }
+.ask-sheet .ideas { flex: 1 1 auto; min-height: 0; align-content: flex-start; overflow-y: auto; margin: 0; padding: 8px 2px 0; }
+.ask-sheet .chip { min-height: 44px; padding: 0 16px; border-radius: 22px; border: 1px solid var(--line-2); background: var(--card); font-size: 14px; font-weight: 400; }
+.ask-sheet .replies .reply-chip { padding: 10px 16px; }
+.sheet .replies .reply-chip:first-child { border-color: transparent; }
+.quick { flex: none; display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 6px 0; margin: -6px 0; }
+.quick::-webkit-scrollbar { display: none; }
+.quick-chip {
+  position: relative; flex: none; height: 32px; padding: 0 12px; border-radius: 16px; display: flex; align-items: center; gap: 6px;
+  background: var(--card); color: var(--ink-2); font-size: 12px; white-space: nowrap;
+}
+.quick-chip::after { content: ''; position: absolute; left: 0; right: 0; top: -6px; bottom: -6px; }
+.quick-chip:active { background: var(--glass-press); }
+.ask-sheet .ask-field { flex: none; height: var(--ask-h); border-radius: 18px; background: var(--field); border: 1px solid var(--accent); padding: 0 7px 0 16px; gap: 8px; }
+.ask-sheet .ask-field input { font-size: max(16px, calc(15px * var(--dt, 1))); }
+.ask-sheet .ask-send { width: 40px; height: 40px; }
+.ask-sheet .ask-mic { width: 40px; height: 40px; color: var(--icon); }
+.ask-sheet .autosend { margin-top: 0; background: var(--card); }
+.ask-sheet .talk-tip { margin-top: 0; }
+.talk-mic { background: var(--card-2); }
+/* Keyboard up: the title stays, the conversation keeps the room. */
+.kb-open .ask-head-text span { display: none; }

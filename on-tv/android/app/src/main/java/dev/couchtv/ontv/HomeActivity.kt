@@ -76,11 +76,16 @@ class HomeActivity : Activity() {
         }
         web = w
         setContentView(w)
+        // The home is the TV's ambient screen: no screensaver or sleep while it is in front. An app
+        // opened from it, or switching the TV off, is what takes it away.
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideBars()
         load()
     }
 
     private fun load() { web?.loadUrl("$base/tv/") }
+
+    override fun onStart() { super.onStart(); current = java.lang.ref.WeakReference(this) }
 
     override fun onResume() { super.onResume(); hideBars(); if (ready) js("window.tv && tv.resume()") }
     override fun onNewIntent(i: Intent) { super.onNewIntent(i); js("window.tv && tv.home()") }
@@ -127,6 +132,26 @@ class HomeActivity : Activity() {
             return true
         }
         @JavascriptInterface fun openSettings(): Boolean = runCatching { Tv.openSettings() }.isSuccess
+        /** The TV's own inputs (HDMI ports, antenna, composite), not streaming apps' channels, by the TV's names. */
+        @JavascriptInterface fun inputs(): String {
+            val out = JSONArray()
+            val tim = getSystemService(android.media.tv.TvInputManager::class.java) ?: return "[]"
+            val list = runCatching { tim.tvInputList }.getOrDefault(emptyList())
+                .filter { it.isPassthroughInput || it.id.contains("/HW") }
+                .sortedWith(compareBy({ if (it.type == android.media.tv.TvInputInfo.TYPE_HDMI) 0 else 1 }, { it.loadLabel(this@HomeActivity).toString() }))
+            for (info in list) {
+                // the TV's own names (HDMI 1...), except its tuner's ("Tuner(DTV)"): Antenna, as Amazon's own list says
+                val label = info.loadCustomLabel(this@HomeActivity)?.toString()
+                    ?: if (info.type == android.media.tv.TvInputInfo.TYPE_TUNER) "Antenna" else info.loadLabel(this@HomeActivity).toString()
+                out.put(JSONObject().put("id", info.id).put("label", label).put("type", info.type))
+            }
+            return out.toString()
+        }
+        /** Plays one of those inputs full screen (InputActivity). */
+        @JavascriptInterface fun openInput(id: String): Boolean {
+            main.post { runCatching { startActivity(Intent(this@HomeActivity, InputActivity::class.java).putExtra("input", id)) } }
+            return true
+        }
         @JavascriptInterface fun version(): String = BuildConfig.VERSION_NAME
         @JavascriptInterface fun keep(key: String, value: String) { getSharedPreferences("page", MODE_PRIVATE).edit().putString(key, value).apply() }
         @JavascriptInterface fun kept(key: String): String? = getSharedPreferences("page", MODE_PRIVATE).getString(key, null)
@@ -166,15 +191,45 @@ class HomeActivity : Activity() {
 
     private fun iconImage(pkg: String): ByteArray? {
         icons[pkg]?.let { return it }
-        val d = try { packageManager.getApplicationIcon(pkg) } catch (e: Exception) { return null }
-        val bmp = Bitmap.createBitmap(128, 128, Bitmap.Config.ARGB_8888)
-        d.setBounds(0, 0, 128, 128); d.draw(Canvas(bmp))
+        // The app's own icon at the highest density it ships (xxxhdpi: 192 px for a classic icon,
+        // 432 px for an adaptive one), drawn at its own size and never enlarged: the home shows it
+        // at 132 px on a 1080p TV, so it is only ever scaled down.
+        val d = hiResIcon(pkg) ?: return null
+        val src = (d as? android.graphics.drawable.BitmapDrawable)?.bitmap
+        // A best icon that is not square (DirecTV ships a 1280x720 one at xxxhdpi, the same art as
+        // its square icon) is cropped to a square from the middle, filling the tile like the square
+        // icon does: never stretched, never shrunk into a band.
+        val w = src?.width ?: d.intrinsicWidth.takeIf { it > 0 } ?: 192
+        val h = src?.height ?: d.intrinsicHeight.takeIf { it > 0 } ?: 192
+        val size = minOf(w, h).coerceIn(48, 512)
+        val k = size.toFloat() / minOf(w, h)
+        val dw = Math.round(w * k); val dh = Math.round(h * k)
+        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        d.setBounds((size - dw) / 2, (size - dh) / 2, (size - dw) / 2 + dw, (size - dh) / 2 + dh); d.draw(Canvas(bmp))
         val bytes = ByteArrayOutputStream().also { bmp.compress(Bitmap.CompressFormat.PNG, 100, it); bmp.recycle() }.toByteArray()
         icons[pkg] = bytes
         return bytes
     }
 
+    private fun hiResIcon(pkg: String): Drawable? {
+        try {
+            val ai = packageManager.getApplicationInfo(pkg, 0)
+            if (ai.icon != 0) {
+                val res = packageManager.getResourcesForApplication(ai)
+                @Suppress("DEPRECATION")
+                res.getDrawableForDensity(ai.icon, android.util.DisplayMetrics.DENSITY_XXXHIGH, null)?.let { return it }
+            }
+        } catch (e: Exception) { /* fall back to what Android picks */ }
+        return try { packageManager.getApplicationIcon(pkg) } catch (e: Exception) { null }
+    }
+
     companion object {
+        @Volatile private var current: java.lang.ref.WeakReference<HomeActivity>? = null
+        /** Reloads the home page if it is open (live edits, /api/dev/tv-reload). */
+        fun reloadNow() {
+            val a = current?.get() ?: return
+            a.runOnUiThread { a.web?.clearCache(false); a.ready = false; a.load() }
+        }
         private val GROUND = Color.parseColor("#0D1E19")
         private val FLAP = Color.parseColor("#131614")
     }

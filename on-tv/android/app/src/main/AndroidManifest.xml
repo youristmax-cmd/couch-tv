@@ -60,6 +60,14 @@
             android:screenOrientation="landscape"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode|density|fontScale|locale" />
 
+        <!-- A TV input (HDMI, antenna) full screen, from the home's own input picker. -->
+        <activity
+            android:name=".InputActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:screenOrientation="landscape"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode|density|fontScale|locale" />
+
         <!-- OFF by default, so installing never takes over the home button. "Use as home screen" in setup turns it on. -->
         <activity-alias
             android:name=".HomeAlias"

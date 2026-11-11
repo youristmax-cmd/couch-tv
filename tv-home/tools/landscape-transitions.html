@@ -1,0 +1,101 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>landscape transitions</title>
+<!--
+Makes the in-between pictures that let the home hand over from one landscape frame to the next with
+no blur.
+
+The la-hills frames were relit one by one by an image generator, which redraws the fine detail
+(rocks, trees, buildings) a little differently each time. Half of one frame over half of another
+therefore looks soft, and no alignment can fix it: the details are different drawings, not the same
+drawing moved. Light, though, mixes cleanly.
+
+So each picture is split into its light (a blur of it: colours, glow, shading) and its detail (the
+picture minus that blur). For a handover A -> B this makes two pictures with the light halfway
+between A and B:
+  mid-A = half-way light + A's detail        mid-B = half-way light + B's detail
+and the home plays  A -> mid-A (light moves, A's detail: sharp)  -> mid-B (only the detail swaps,
+a few seconds)  -> B (light moves, B's detail: sharp).
+
+Run with a server that serves the repo and saves POST /save?name=<file> into build/transitions/:
+  open http://127.0.0.1:<port>/tv-home/tools/landscape-transitions.html   (?only=06-07 for one)
+Logs "TRANS" lines. Copy the files into landscape/la-hills/ and list them in manifest.json "transitions".
+-->
+<script>
+"use strict";
+const SRC = "/tv-home/web/landscape/" + ((location.search.match(/land=([a-z0-9-]+)/) || [])[1] || "la-hills") + "/", W = 1920, H = 1080;
+// light = a blur of this radius (px at 1920x1080); the detail is everything finer
+const SIGMA = +((location.search.match(/sigma=([\d.]+)/) || [])[1] || 6);
+const only = (location.search.match(/only=([^&]+)/) || [])[1];
+function log(m) { console.log("TRANS " + m); }
+function load(url) { return new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(url); i.src = url; }); }
+
+// a frame as it shows on screen (its manifest "align" applied), as float RGB, and its blurred light
+function screen(img, al) {
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const g = c.getContext("2d"), [s, tx, ty] = al || [1, 0, 0];
+  g.setTransform(s, 0, 0, s, tx, ty); g.drawImage(img, 0, 0, W, H);
+  const px = g.getImageData(0, 0, W, H).data;
+  // the blur, drawn over a frame-sized copy padded by its own edges so the borders do not darken
+  const b = document.createElement("canvas"); b.width = W; b.height = H;
+  const bg = b.getContext("2d"), pad = Math.ceil(SIGMA * 3);
+  bg.filter = "blur(" + SIGMA + "px)";
+  bg.drawImage(c, -pad, -pad, W + 2 * pad, H + 2 * pad);
+  bg.drawImage(c, 0, 0);
+  const lo = bg.getImageData(0, 0, W, H).data;
+  return { px, lo };
+}
+
+async function transition(fa, fb, man) {
+  const t0 = performance.now();
+  const al = (f) => (man.frames.find((x) => x.file === f) || {}).align || null;
+  const [ia, ib] = await Promise.all([load(SRC + fa), load(SRC + fb)]);
+  const A = screen(ia, al(fa)), B = screen(ib, al(fb));
+  const id = fa.match(/\d+/)[0] + "-" + fb.match(/\d+/)[0];
+  const out = { a: "mid-" + id + "-a.jpg", b: "mid-" + id + "-b.jpg" };
+  for (const [name, X] of [[out.a, A], [out.b, B]]) {
+    const c = document.createElement("canvas"); c.width = W; c.height = H;
+    const g = c.getContext("2d"), im = g.createImageData(W, H), d = im.data;
+    for (let i = 0; i < W * H * 4; i += 4) {
+      for (let ch = 0; ch < 3; ch++) {
+        const light = 0.5 * (A.lo[i + ch] + B.lo[i + ch]);      // half-way light
+        const detail = X.px[i + ch] - X.lo[i + ch];              // this frame's own detail
+        d[i + ch] = light + detail;                              // Uint8Clamped clamps
+      }
+      d[i + 3] = 255;
+    }
+    g.putImageData(im, 0, 0);
+    const blob = await new Promise((ok) => c.toBlob(ok, "image/jpeg", 0.9));
+    await fetch("/save?name=" + name, { method: "POST", body: blob });
+    log(name + " " + Math.round(blob.size / 1024) + " KB");
+  }
+  log(fa + " -> " + fb + " done in " + Math.round(performance.now() - t0) + " ms");
+  return { between: [fa, fb], a: out.a, b: out.b };
+}
+
+(async () => {
+  try {
+    const man = await (await fetch(SRC + "manifest.json")).json();
+    // every pair of frames the home hands over between, morning and evening
+    const am = man.frames.filter((f) => f.period !== "pm"), pm = man.frames.filter((f) => f.period !== "am");
+    am.forEach((f) => { if (f.period === "am" && !pm.some((p) => p.altitude === f.altitude)) pm.push(f); });
+    const pairs = [];
+    for (const list of [am, pm]) {
+      list.sort((x, y) => x.altitude - y.altitude);
+      for (let i = 0; i < list.length - 1; i++) {
+        const k = list[i].file + "|" + list[i + 1].file;
+        if (!pairs.includes(k)) pairs.push(k);
+      }
+    }
+    const done = [];
+    for (const k of pairs) {
+      const [fa, fb] = k.split("|");
+      const id = fa.match(/\d+/)[0] + "-" + fb.match(/\d+/)[0];
+      if (only && only !== id) continue;
+      done.push(await transition(fa, fb, man));
+    }
+    log("MANIFEST " + JSON.stringify(done));
+    log("DONE");
+  } catch (e) { log("FAILED " + e); }
+})();
+</script>

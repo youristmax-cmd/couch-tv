@@ -31,6 +31,7 @@
   var ON_TV = false;   // served by the on-TV app (config "mode"), which can open the TV's own settings screens
   // The look: ?theme= for a preview, then Home settings (or the Look button) on this TV, then home.look.
   var THEME = "night", NIGHT = true, CLOCK24 = false;
+  var SOLAR = false;   // home.mode "solar": the landscape lit by the real sun (sky.js), and the glass app bar
   // Home settings made on this TV with the gear tile (see "home settings" below). They win over
   // config.js. ST is the saved object; the rest are read from it in readConfig().
   var ST = {}, WX_SHOW = true, WX_F = false, WX_EVERY = 30, HIDDEN_TV = [];
@@ -171,12 +172,25 @@
     var mine = TV_ID || CFG.default_tv;
     TVCFG = (CFG.tvs || []).filter(function (t) { return t.id === mine; })[0] || (CFG.tvs || [])[0] || {};
     // no "quick" from an older bridge: the sleep timer, and the picture switch where the TV has one
+    // Bluetooth moved to the gear's menu: a saved quick list from before loses it once (Home
+    // settings can still put it back)
+    if (Array.isArray(ST.quick) && ST.quick.indexOf("bluetooth") >= 0 && !ST.bt_in_gear) {
+      ST.quick = ST.quick.filter(function (q) { return q !== "bluetooth"; });
+      ST.bt_in_gear = true;
+      setTimeout(saveSettings, 0);
+    }
     QUICK = (Array.isArray(ST.quick) ? ST.quick : TVCFG.quick || ["sleep", "picture"])
       .filter(function (q, i, a) { return QUICK_ALL.indexOf(q) >= 0 && a.indexOf(q) === i; });
     THEME = (Q.match(/[?&]theme=([a-z]+)/) || [])[1] || lookSetting();
     if (THEME !== "classic") THEME = "night";
     NIGHT = THEME === "night";
     document.documentElement.classList.toggle("theme-night", NIGHT);
+    // home.mode: "solar" (the default, one landscape lit by the real sun, sky.js) or "scenes" (the
+    // five scenes taking turns). ?mode= for previews.
+    var mode = (Q.match(/[?&]mode=([a-z]+)/) || [])[1] || ST.mode || HOME.mode || "solar";
+    SOLAR = NIGHT && mode !== "scenes" && !!window.Sky;
+    document.documentElement.classList.toggle("mode-solar", SOLAR);
+    document.documentElement.classList.toggle("no-blur", SOLAR && HOME.bar_blur === false);
     GRID_COLS = NIGHT ? 12 : 8;
     DOCK_APPS = Math.max(1, Math.min(10, parseInt(HOME.dock_size, 10) || 10));
     if (smartOn()) DOCK_APPS = Math.min(DOCK_APPS, 9);   // the Smart home tile takes one place in the dock
@@ -196,6 +210,13 @@
     if (lst && Array.isArray(lst.people) && (lst.pending || ALONE)) people = lst.people;
     setPeople(localPeopleOrder(people, OFFLINE));
     newApps = kept("tvhome.apps.new") || [];
+  }
+  // How dates are written. English is written the Australian way unless the home is in the US
+  // (config country "US", or its weather place is in an American time zone): "Monday November 9".
+  function dateLocale() {
+    var loc = window.I18N ? window.I18N.locale() : "en-AU";
+    if (loc === "en-AU" && (CFG.country === "US" || /^America\//.test(WXCFG.timezone || ""))) loc = "en-US";
+    return loc;
   }
   function lookSetting() { return ST.look || kept("tvhome.look") || HOME.look || "night"; }
   // no clock in Home settings or config.json: the one usual for the language (24 hour in Italian)
@@ -325,12 +346,29 @@
   function tempText(c) { return WX_F ? Math.round(c * 9 / 5 + 32) + "°F" : c + "°"; }
   function wxText(w) { var k = WMO_KEY[w.code]; return k ? t(k) : (w.text || ""); }
 
+  // the solar glass clock's fill: the frosted landscape behind the digits, lined up with the screen
+  var glassUrl = null;
+  function solarGlass() {
+    var c = $("time"), f = c.firstChild;
+    if (!f || !glassUrl) return;
+    f.style.backgroundImage = 'url("' + glassUrl + '")';
+    f.style.backgroundPosition = -(c.offsetLeft + f.offsetLeft) + "px " + -(c.offsetTop + f.offsetTop) + "px";
+  }
   function clock() {
-    var d = new Date(), h = d.getHours(), m = d.getMinutes();
+    // solar: the landscape's clock, which ?t= and the dev sweep can move
+    var d = SOLAR ? window.Sky.now() : new Date(), h = d.getHours(), m = d.getMinutes();
     var mm = (m < 10 ? "0" : "") + m;
     var hm = CLOCK24 ? (h < 10 ? "0" : "") + h + ":" + mm : (h % 12 || 12) + ":" + mm;
-    $("time").innerHTML = hm + (CLOCK24 ? "" : "<small>" + esc(h < 12 ? t("am") : t("pm")) + "</small>");
-    var loc = window.I18N ? window.I18N.locale() : "en-AU";
+    var hmx = hm + (CLOCK24 ? "" : "<small>" + esc(h < 12 ? t("am") : t("pm")) + "</small>");
+    if (SOLAR) {
+      // the glass clock, as in the scenes: a frosted copy of the landscape, a sheen and a rim
+      if ($("time").getAttribute("data-hm") !== hmx) {
+        $("time").setAttribute("data-hm", hmx);
+        $("time").innerHTML = '<span class="fill">' + hmx + '</span><span class="sheen">' + hmx + '</span><span class="rim">' + hmx + "</span>";
+        solarGlass();
+      }
+    } else $("time").innerHTML = hmx;
+    var loc = dateLocale();
     var day = d.toLocaleDateString(loc, { weekday: "long", day: "numeric", month: "long" }).replace(",", "");
     day = day.charAt(0).toUpperCase() + day.slice(1);   // "lunes 27 de octubre" starts a line on screen
     var w = NIGHT && WX_SHOW && data.weather && data.weather.temp != null ? data.weather : null;
@@ -338,7 +376,7 @@
       '<span class="ww"> ' + esc(wxText(w)) + "</span></span>" : "") + "</span>";
     fitDate();
     document.body.classList.toggle("night", h >= 21 || h < 6);
-    if (NIGHT) glassClock(hm);
+    if (NIGHT && !SOLAR) glassClock(hm);
     if (quickReady) renderQuick();
   }
 
@@ -558,9 +596,14 @@
   // The bridge's reading for the place in config.json, or straight from Open-Meteo with no bridge
   // or when Home settings chose another place. Hidden when Home settings switched the weather off.
   function refreshWeather() {
-    if (!NIGHT || !WX_SHOW) return Promise.resolve();
+    // (solar: fetched even with the weather line hidden, as the landscape shows the weather)
+    if (!NIGHT || (!WX_SHOW && !SOLAR)) return Promise.resolve();
     var direct = OFFLINE || !!(ST.place && isFinite(ST.place.lat));
-    return (direct ? weatherDirect() : api("GET", "/api/weather")).then(function (j) { data.weather = j; clock(); }, function () {});
+    return (direct ? weatherDirect() : api("GET", "/api/weather")).then(function (j) {
+      data.weather = j; clock();
+      // the landscape follows the live weather (overcast, rain, showers, partly cloudy)
+      if (SOLAR && j && j.code != null) window.Sky.setWeather(j.code);
+    }, function () {});
   }
 
   // Open-Meteo (free, no key), the same call the bridge makes. The words come from i18n.js.
@@ -706,7 +749,36 @@
   }
   // The TV's own input list (HDMI, a console, a set top box): the TV_INPUT key through the bridge,
   // or straight from the launcher when there is no bridge (only where the TV has such a screen).
+  // The TV's inputs in the home's own picker (on-TV app: TVOS.inputs lists the TV's HDMI ports,
+  // antenna and so on; choosing one plays it full screen in the app). Elsewhere, the TV's own list.
+  var INPUTS = [], ii = 0, inputsFrom = "grid";
+  function nativeInputList() {
+    try { return TV && TV.inputs ? JSON.parse(TV.inputs()) : null; } catch (e) { return null; }
+  }
+  function renderInputs() {
+    var pop = $("gear-pop");
+    pop.innerHTML = INPUTS.map(function (it, i) {
+      return '<div class="grow' + (i === ii ? " focus" : "") + '" role="menuitem"><i>' + ICONS.screen + "</i><span><b>" +
+        esc(it.label) + "</b>" + (it.sub ? "<small>" + esc(it.sub) + "</small>" : "") + "</span></div>";
+    }).join("");
+    pop.classList.add("on");
+    document.documentElement.classList.add("gearing");
+    // next to what opened it: above a bar button, below a quick button
+    var el = inputsFrom === "quick" ? quickEls[qi] : gridEls[g], rem = innerWidth / 120;
+    if (el) {
+      var b = el.getBoundingClientRect(), w = pop.offsetWidth;
+      pop.style.left = Math.max(5 * rem, Math.min(innerWidth - w - 5 * rem, b.left + b.width / 2 - w / 2)) + "px";
+      pop.style.top = (inputsFrom === "quick" ? b.bottom + 1.5 * rem : Math.max(3.75 * rem, b.top - pop.offsetHeight - 2.25 * rem)) + "px";
+    }
+  }
+  function closeInputs() {
+    $("gear-pop").classList.remove("on");
+    document.documentElement.classList.remove("gearing");
+    if (zone === "inputs") zone = inputsFrom;
+  }
   function openInputs() {
+    var list = nativeInputList();
+    if (list && list.length) { INPUTS = list; ii = 0; inputsFrom = zone === "quick" ? "quick" : "grid"; zone = "inputs"; renderInputs(); return; }
     var native = function () { try { return !!(TV && TV.openInputs && TV.openInputs()); } catch (e) { return false; } };
     if (OFFLINE) { if (!native()) note(t("no_inputs")); return; }
     api("POST", "/api/key", { key: "input" })
@@ -920,9 +992,57 @@
     var arr = arrangeItems();
     var list = expanded ? arr.items.slice() : arr.items.slice(0, arr.line);
     if (expanded && store) list.unshift({ kind: "app", store: true, name: t("app_store"), package: STORE_PKG, id: store.id });
+    // solar bar: after the apps, the gear and More apps (the inputs are the Input quick button, top right)
     list = list.concat(toolItems());
     if (!expanded) list.push(moreItem());
     return list;
+  }
+  function inputItem() { return { kind: "input", name: t("input"), package: "tv:inputs" }; }
+
+  // ---------------- the solar bar: brand tiles ----------------
+  // Each app's mark on its own tile colour. Logos live in app-logos/ (copied from remote/src/app-logos/,
+  // 256 px or SVG, shown at 132 px, never enlarged). "mark": a logo on white, blended onto the tile colour.
+  var CREAM = "#f2eadc";
+  var BRAND = {
+    "com.netflix.ninja": { src: "com.netflix.ninja.png", bg: CREAM, mark: true },
+    "com.amazon.firetv.youtube": { src: "youtube.svg", bg: CREAM },
+    "com.amazon.firetv.youtube.tv": { src: "youtube.svg", bg: CREAM },
+    "com.google.android.youtube.tv": { src: "youtube.svg", bg: CREAM },
+    "com.amazon.avod": { src: "com.amazon.amazonvideo.livingroom.png" },
+    "com.amazon.amazonvideo.livingroom": { src: "com.amazon.amazonvideo.livingroom.png" },
+    "com.hbo.hbonow": { src: "com.wbd.stream.png" },
+    "com.wbd.stream": { src: "com.wbd.stream.png" }
+  };
+  ["au.com.foxtel.atv", "au.com.kayosports.tv", "au.com.ninenow.ctv", "au.com.stan.and", "au.com.streamotion.ares.tv",
+    "au.com.tenplay", "au.net.abc.iview", "com.apple.atve.androidtv.appletv", "com.cbs.ca", "com.disney.disneyplus",
+    "com.sbs.ondemand.tv", "com.spotify.tv.android", "com.swm.live", "tv.twitch.android.app"].forEach(function (p) {
+    BRAND[p] = { src: p + ".png" };
+  });
+  function isUtil(it) { return it.kind === "input" || it.kind === "gear" || it.kind === "more" || it.kind === "smart" || it.kind === "screen"; }
+  function barHTML(it, first) {
+    var cls = "tile app" + (lift && it.package === lift.pkg ? " lifted" : "");
+    if (isUtil(it)) {
+      var ic = it.kind === "more" ? ICONS.apps : it.kind === "gear" ? ICONS.gear : it.kind === "smart" ? window.smartHome.icon : ICONS.screen;
+      return '<div class="' + cls + ' util' + (first ? " first" : "") + '" data-kind="' + esc(it.kind) + '"><div class="face tool">' + ic + "</div>" +
+        dotHTML(it) + '<div class="label">' + esc(it.name) + "</div></div>";
+    }
+    var b = BRAND[it.package], face;
+    if (b) {
+      face = '<div class="face brand' + (b.mark ? " mark" : "") + '"' + (b.bg ? ' style="background:' + b.bg + '"' : "") +
+        '><img src="app-logos/' + esc(b.src) + '" alt="" decoding="async"></div>';
+    } else if (iconUrl(it.package)) {
+      face = '<div class="face"><img src="' + esc(iconUrl(it.package)) + '" alt="" decoding="async" onerror="this.parentNode.className=\'face word\';this.parentNode.textContent=this.getAttribute(\'data-name\')" data-name="' + esc(it.name) + '"></div>';
+    } else if (it.store) face = '<div class="face tool">' + ICONS.store + "</div>";
+    else face = '<div class="face word">' + esc(it.name) + "</div>";
+    return '<div class="' + cls + '">' + face + dotHTML(it) + '<div class="label">' + esc(it.name) + "</div></div>";
+  }
+  // the bar is centred; an odd width would put every tile on a half pixel, so it gets one more
+  function evenBar() {
+    if (!SOLAR || expanded) return;
+    var g = $("grid"), dpr = window.devicePixelRatio || 1;
+    g.classList.remove("odd");
+    var w = Math.round(g.getBoundingClientRect().width * dpr), W = Math.round(window.innerWidth * dpr);
+    if ((W - w) % 2) g.classList.add("odd");
   }
 
   // Tell the bridge which apps this TV has (in its default order), so the phone can arrange them.
@@ -978,7 +1098,7 @@
   function holdApp() {
     var a = gridItems[g];
     if (!a || a.kind === "more") return false;
-    if (a.store || a.kind === "gear" || a.kind === "smart") { flash(t("stays_put", { name: a.name })); return true; }
+    if (a.store || a.kind === "gear" || a.kind === "smart" || a.kind === "input") { flash(t("stays_put", { name: a.name })); return true; }
     var arr = arrangeItems();
     var idx = arr.items.map(function (it) { return it.package; }).indexOf(a.package);
     if (idx < 0) return false;
@@ -1107,8 +1227,16 @@
       GRID_COLS = expanded ? 12 : Math.max(1, Math.min(12, gridItems.length));
       $("grid").style.gridTemplateColumns = "repeat(" + GRID_COLS + ", 7rem)";
     }
-    $("grid").innerHTML = gridItems.map(appHTML).join("");
+    if (SOLAR && !expanded) {
+      var firstUtil = -1;
+      gridItems.some(function (it, i) { if (isUtil(it)) { firstUtil = i; return true; } return false; });
+      $("grid").innerHTML = gridItems.map(function (it, i) { return barHTML(it, i === firstUtil); }).join("");
+      $("grid").style.gridTemplateColumns = "";
+    } else {
+      $("grid").innerHTML = gridItems.map(appHTML).join("");
+    }
     gridEls = Array.prototype.slice.call($("grid").children);
+    if (SOLAR) (window.requestAnimationFrame || setTimeout)(evenBar);
     renderHint();
   }
 
@@ -1134,11 +1262,18 @@
   function toPeople() { zone = "people"; pi = whoIndex(); }
 
   function paintFocus() {
+    document.documentElement.classList.toggle("shelf-open", SOLAR && zone === "shelf");
     if (zone === "settings") { renderSettings(); return; }
     if (zone === "smart") { window.smartHome.paint(); return; }
     clearFocus();
     renderHint();
     if (zone === "gear") { if (gridEls[g]) gridEls[g].classList.add("focus"); renderGear(); return; }
+    if (zone === "inputs") {
+      var from = inputsFrom === "quick" ? quickEls[qi] : gridEls[g];
+      if (from) from.classList.add("focus");
+      renderInputs();
+      return;
+    }
     if (zone === "updask") { renderAsk(); return; }
     if (zone === "menu") { renderMenu(); return; }
     if (zone === "pmenu") { renderPop(); $("people").classList.add("focus"); return; }
@@ -1189,7 +1324,8 @@
     touched = true;
     if (zone === "settings") { setMove(dx, dy); return; }
     if (zone === "smart") { window.smartHome.move(dx, dy); return; }
-    if (zone === "gear") { if (dy) { gi = Math.max(0, Math.min(1, gi + dy)); renderGear(); } return; }
+    if (zone === "gear") { if (dy) { gi = Math.max(0, Math.min(gearItems().length - 1, gi + dy)); renderGear(); } return; }
+    if (zone === "inputs") { var dI = dy || dx; if (dI) { ii = Math.max(0, Math.min(INPUTS.length - 1, ii + dI)); renderInputs(); } return; }
     if (zone === "updask") { if (dy) { ai = Math.max(0, Math.min(1, ai + dy)); renderAsk(); } return; }
     if (lift) { moveLift(dx, dy); return; }
     // Night with More apps open: the cards step aside, so up and down skip them
@@ -1214,7 +1350,7 @@
       else if (dx) qi = Math.max(0, Math.min(nq - 1, qi + dx));
       else if (dy > 0) {
         if (peopleOn()) toPeople();
-        else if (cards.length) zone = "shelf";
+        else if (cards.length && !SOLAR) zone = "shelf";
         else { zone = "grid"; g = Math.min(GRID_COLS, gridEls.length) - 1; }
       }
       paintFocus();
@@ -1225,10 +1361,17 @@
       else if (dx && !isHead()) {
         // moving across the names only moves the outline; OK picks (you have to click to select), so passing a name on the way to Sleep timer changes nothing
         pi = Math.max(0, Math.min(PEOPLE.length - 1, pi + dx));
-      } else if (dy > 0) zone = cards.length ? "shelf" : "grid";
+      } else if (dy > 0) zone = cards.length && !SOLAR ? "shelf" : "grid";
     } else if (zone === "shelf") {
       if (dx) s = Math.max(0, Math.min(shelfEls.length - 1, s + dx));
+      else if (dy < 0 && SOLAR && gridEls.length) {
+        // solar: the cards are under the bar, so up goes back to the app above the show
+        var bs = shelfEls[s].getBoundingClientRect();
+        g = nearestInRow(0, bs.left + bs.width / 2);
+        zone = "grid";
+      }
       else if (dy < 0) { if (peopleOn()) toPeople(); else if (hasQuick()) { zone = "quick"; qi = 0; } }
+      else if (dy > 0 && SOLAR) { /* the bottom of the screen */ }
       else if (dy > 0 && gridEls.length) {
         // land on the app under the show
         var b = shelfEls[s].getBoundingClientRect();
@@ -1240,8 +1383,17 @@
       if (dx) {
         var nx = g + dx;
         if (nx >= 0 && nx < gridEls.length && Math.floor(nx / GRID_COLS) === row) g = nx;
+      } else if (SOLAR && dy > 0 && row === lastRow && cards.length) {
+        // solar: Keep watching stays out of sight under the bar until down is pressed
+        zone = "shelf";
+        var bg = gridEls[g] && gridEls[g].getBoundingClientRect();
+        s = 0;
+        if (bg) {
+          var best = Infinity;
+          shelfEls.forEach(function (el, i) { var r = el.getBoundingClientRect(), d = Math.abs(r.left + r.width / 2 - bg.left - bg.width / 2); if (d < best) { best = d; s = i; } });
+        }
       } else if (dy < 0 && row === 0) {
-        if (cards.length) zone = "shelf";
+        if (cards.length && !SOLAR) zone = "shelf";
         else if (peopleOn()) toPeople();
         else if (hasQuick()) zone = "quick";   // offline the sleep and picture buttons are hidden
       } else if (dy < 0) {
@@ -1256,7 +1408,9 @@
   // Start on the people switch, so the first press picks who is watching.
   function startFocus() {
     s = 0; g = 0;
-    if (peopleOn()) toPeople();
+    // solar: the bar first; the cards are under it (?shelf=1 opens them, for previews)
+    if (SOLAR) zone = /[?&]shelf=1/.test(Q) && shelfEls.length ? "shelf" : "grid";
+    else if (peopleOn()) toPeople();
     else zone = shelfEls.length ? "shelf" : "grid";
   }
 
@@ -1264,6 +1418,7 @@
     if (zone === "settings") { setBack(); return; }
     if (zone === "smart") { closeSmart(); paintFocus(); return; }
     if (zone === "gear") { closeGear(); paintFocus(); return; }
+    if (zone === "inputs") { closeInputs(); paintFocus(); return; }
     if (zone === "updask") { answerAsk(false); return; }   // BACK counts as "I'll check myself"
     if (lift) { dropLift(); return; }   // BACK puts a picked-up app down where it is
     if (zone === "pmenu") { if (plift) dropPeople(); else closePop(); paintFocus(); return; }
@@ -1279,7 +1434,7 @@
   function hold() {
     touched = true;
     if (zone === "settings") return setHold();
-    if (zone === "gear" || zone === "smart" || zone === "updask") return false;
+    if (zone === "gear" || zone === "inputs" || zone === "smart" || zone === "updask") return false;
     if (lift) { dropLift(); return true; }
     if (zone === "pmenu") {
       if (plift) dropPeople();
@@ -1294,7 +1449,13 @@
     touched = true;
     if (zone === "settings") { setActivate(); return; }
     if (zone === "smart") { window.smartHome.ok(); return; }
-    if (zone === "gear") { if (gi === 0) openSettings(); else openTvSettings(); return; }
+    if (zone === "gear") { var gk = gearItems()[gi]; if (gk === "home") openSettings(); else if (gk === "bt") { closeGear(); paintFocus(); openSettingsScreen("bluetooth"); } else openTvSettings(); return; }
+    if (zone === "inputs") {
+      var inp = INPUTS[ii];
+      closeInputs(); paintFocus();
+      if (inp) { try { TV.openInput(inp.id); } catch (e) { note(t("no_inputs")); } }
+      return;
+    }
     if (zone === "updask") { answerAsk(ai === 0); return; }
     if (lift) { dropLift(); return; }
     if (zone === "menu") { setSleep(SLEEP_CHOICES[menuI]); paintFocus(); return; }
@@ -1335,6 +1496,7 @@
     if (!a) return;
     if (a.kind === "more") { expanded = true; renderGrid(); paintFocus(); return; }
     if (a.kind === "gear") { openGear(); return; }
+    if (a.kind === "input") { openInputs(); return; }
     if (a.kind === "smart") { openSmart(); return; }
     if (a.kind === "screen") {
       if (!a.ready) { status(a.note || t("screen_not_set")); return; }
@@ -1359,14 +1521,18 @@
 
   // ---------------- the gear tile's menu: Home settings or the TV's own settings ----------------
   var gi = 0;
+  // The gear's menu: Home settings, the TV's settings, and (on-TV app) Bluetooth, which is not used
+  // often enough for a button of its own at the top
+  function gearItems() { return ON_TV && !OFFLINE ? ["home", "tv", "bt"] : ["home", "tv"]; }
   function openGear() {
     zone = "gear"; gi = 0;
     renderGear();
   }
   function renderGear() {
     var pop = $("gear-pop");
-    var items = [[ICONS.sliders, t("gear_home"), updReady() ? t("upd_gear", { v: UPD.latest }) : t("gear_home_sub")],
-      [ICONS.gear, t("gear_tv"), t("gear_tv_sub")]];
+    var all = { home: [ICONS.sliders, t("gear_home"), updReady() ? t("upd_gear", { v: UPD.latest }) : t("gear_home_sub")],
+      tv: [ICONS.gear, t("gear_tv"), t("gear_tv_sub")], bt: [ICONS.bluetooth, t("bluetooth"), t("quick_bluetooth")] };
+    var items = gearItems().map(function (k) { return all[k]; });
     pop.innerHTML = items.map(function (it, i) {
       return '<div class="grow' + (i === gi ? " focus" : "") + '" role="menuitem"><i>' + it[0] + "</i><span><b>" + esc(it[1]) +
         "</b><small>" + esc(it[2]) + "</small></span></div>";
@@ -2002,7 +2168,7 @@
   }
   function updWhen(u) {
     if (!u.checked) return t("upd_never");
-    var loc = window.I18N ? window.I18N.locale() : "en-AU";
+    var loc = dateLocale();
     var when = new Date(u.checked).toLocaleString(loc, { day: "numeric", month: "long", hour: "numeric", minute: "2-digit", hour12: !CLOCK24 });
     return t("upd_last", { when: when });
   }
@@ -2320,7 +2486,7 @@
 
   function refresh() {
     // never reshuffle under something being moved, or under the settings screen
-    if (lift || zone === "pmenu" || zone === "settings" || zone === "gear" || zone === "smart" || zone === "updask") return Promise.resolve();
+    if (lift || zone === "pmenu" || zone === "settings" || zone === "gear" || zone === "inputs" || zone === "smart" || zone === "updask") return Promise.resolve();
     if (OFFLINE) {
       // only the TV's own apps, in the order last saved; no shows, no Screens
       if (TV) data.apps = sortApps(nativeApps() || []);
@@ -2357,7 +2523,7 @@
     ];
     return Promise.all(jobs.map(function (p) { return p.then(function () { return true; }, function () { return false; }); }))
       .then(function (ok) {
-        if (lift || zone === "pmenu" || zone === "settings" || zone === "gear" || zone === "smart" || zone === "updask") return;
+        if (lift || zone === "pmenu" || zone === "settings" || zone === "gear" || zone === "inputs" || zone === "smart" || zone === "updask") return;
         data.bridge = ok[0] || ok[2];
         var apps = TV ? nativeApps() : (window.MOCK_APPS ? window.MOCK_APPS.slice() : null);
         if (!apps) apps = (data.bridgeApps || []).filter(function (a) { return a.installed !== false && a.id !== "home"; })
@@ -2385,7 +2551,9 @@
     // the launcher's file picker has copied the chosen photos into its own storage (Home settings)
     photosAdded: function (names) { photosAdded(names); },
     // the launcher's updater has news (Updater.kt)
-    update: function (state) { updChanged(state); } };
+    update: function (state) { updChanged(state); },
+    // the landscape's dev sweep moved the clock
+    tick: function () { clock(); } };
 
   function start() {
     readConfig();
@@ -2396,7 +2564,16 @@
     mark("app-start");
     clock();
     setInterval(clock, 15000);
-    if (NIGHT) {
+    if (SOLAR) {
+      window.Sky.onGlass(function (u, tint) {
+        glassUrl = u; solarGlass();
+        if (tint) document.documentElement.style.setProperty("--glass-tint", tint);   // the date line matches the clock
+      });
+      window.Sky.start({ weather: WXCFG, landscape: HOME.landscape || "la-hills-v2", clouds: HOME.clouds, blend: HOME.blend, dissolve_seconds: HOME.dissolve_seconds, swap_seconds: HOME.swap_seconds });
+      clock();
+      refreshWeather();
+      setInterval(refreshWeather, WX_EVERY * 60000);
+    } else if (NIGHT) {
       buildScenes();
       // ?scene=fog starts on that scene, for previews (?scene=own: the first of the household's
       // photos; ?scene=<id>: one of your own scenes)

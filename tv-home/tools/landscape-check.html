@@ -1,0 +1,190 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>landscape check</title>
+<!--
+Checks regenerated landscape frames against the base frame: how much of the scene lines up.
+
+The scene (everything with outlines: ridge, far mountains, city, foreground; open sky is skipped)
+is cut into overlapping tiles. For each tile the best shift of the frame against the base is found,
+comparing blurred gradients of log-luminance (outlines, not lighting). Accuracy = the share of
+trusted tiles within TOL px. Because a frame that is only shifted or scaled as a whole can be
+corrected on the TV (manifest "align"), a scale + shift is also fitted to all the tiles and the
+accuracy reported again after it ("fitted").
+
+Also saves an overlay per frame: the base's outlines in magenta, the frame's in green, so where
+they agree it reads white/grey.
+
+Run with a server that serves the repo and saves POST /save?name=<file>:
+  open http://127.0.0.1:<port>/tv-home/tools/landscape-check.html?dir=/build/v2/&files=a.jpg,b.jpg
+Logs "CHECK" lines and a final "CHECK-JSON".
+-->
+<script>
+"use strict";
+const Q = location.search, arg = (k) => decodeURIComponent((Q.match(new RegExp("[?&]" + k + "=([^&]*)")) || [])[1] || "");
+const DIR = arg("dir") || "/build/v2/", BASE = arg("base") || "frame-08.jpg";
+const W = 1920, H = 1080, K = 0.5, TILE = 160, STEP = 80, SEARCH = 24, TOL = 3, BLUR = 3;
+function log(m) { console.log("CHECK " + m); }
+function load(u) { return new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(u); i.src = u; }); }
+function canvas(w, h) { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; }
+
+// blurred signed gradients of log-luminance, at half size
+function grads(img) {
+  const w = W * K, h = H * K, c = canvas(w, h), g = c.getContext("2d");
+  g.filter = "blur(" + BLUR + "px)"; g.drawImage(img, 0, 0, w, h);
+  const d = g.getImageData(0, 0, w, h).data, L = new Float32Array(w * h), GX = new Float32Array(w * h), GY = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) L[i] = Math.log(1 + 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]);
+  for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) { const i = y * w + x; GX[i] = L[i + 1] - L[i - 1]; GY[i] = L[i + w] - L[i - w]; }
+  return { w, h, GX, GY };
+}
+function corr(R, M, x0, y0, n, u, v, nh) {
+  nh = nh || n;
+  const w = R.w; let ab = 0, aa = 0, bb = 0, c = 0;
+  for (let y = y0; y < y0 + nh; y++) {
+    const my = y + v; if (y < 1 || y >= R.h - 1 || my < 1 || my >= R.h - 1) continue;
+    for (let x = x0; x < x0 + n; x++) {
+      const mx = x + u; if (x < 1 || x >= w - 1 || mx < 1 || mx >= w - 1) continue;
+      const i = y * w + x, j = my * w + mx;
+      ab += R.GX[i] * M.GX[j] + R.GY[i] * M.GY[j]; aa += R.GX[i] * R.GX[i] + R.GY[i] * R.GY[i]; bb += M.GX[j] * M.GX[j] + M.GY[j] * M.GY[j]; c++;
+    }
+  }
+  if (c < n * nh * 0.85 || aa <= 0 || bb <= 0) return { r: -1, e: 0 };
+  return { r: ab / Math.sqrt(aa * bb), e: aa / c };
+}
+
+async function check(file, R, base, typical, mask) {
+  const img = await load(DIR + file + "?r=" + Date.now());
+  const M = grads(img);
+  // first the whole-picture shift (up to +-100 px), on a quarter-size copy below the sky
+  const q = (G) => { const w = G.w / 2, h = G.h / 2, X = new Float32Array(w * h), Y = new Float32Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { X[y * w + x] = G.GX[2 * y * G.w + 2 * x]; Y[y * w + x] = G.GY[2 * y * G.w + 2 * x]; }
+    return { w, h, GX: X, GY: Y }; };
+  const Rq = q(R), Mq = q(M);
+  let gb = -2, gu = 0, gv = 0;
+  for (let v = -25; v <= 25; v++) for (let u = -25; u <= 25; u++) {
+    const c = corr(Rq, Mq, 30, Math.round(Rq.h * 0.42), Rq.w - 60, u, v, Math.round(Rq.h * 0.5) - 30);
+    if (c.r > gb) { gb = c.r; gu = u; gv = v; }
+  }
+  gu *= 2; gv *= 2;   // in half-size pixels now
+  const n = TILE * K, step = STEP * K, S = SEARCH * K, tiles = [];
+  for (let y0 = 0; y0 + n <= R.h; y0 += step) for (let x0 = 0; x0 + n <= R.w; x0 += step) {
+    // skip tiles that are almost all sky (mask white) or almost no outline in the base
+    let sky = 0, cnt = 0;
+    for (let y = y0; y < y0 + n; y += 4) for (let x = x0; x < x0 + n; x += 4) { sky += mask[y * R.w + x]; cnt++; }
+    if (sky / cnt > 0.92) continue;
+    let best = -2, bu = 0, bv = 0, e = 0; const sc = {};
+    for (let v = gv - S; v <= gv + S; v++) for (let u = gu - S; u <= gu + S; u++) {
+      const c = corr(R, M, x0, y0, n, u, v); sc[u + "," + v] = c.r;
+      if (c.r > best) { best = c.r; bu = u; bv = v; e = c.e; }
+    }
+    if (e < typical * 0.2) continue;   // no outlines here to judge by
+    const at = (u, v) => (sc[u + "," + v] !== undefined ? sc[u + "," + v] : best);
+    const px = (a, b, c) => { const d = a - 2 * b + c; return d < 0 ? Math.max(-0.5, Math.min(0.5, 0.5 * (a - c) / d)) : 0; };
+    const dx = (bu + px(at(bu - 1, bv), best, at(bu + 1, bv))) / K, dy = (bv + px(at(bu, bv - 1), best, at(bu, bv + 1))) / K;
+    tiles.push({ cx: (x0 + n / 2) / K, cy: (y0 + n / 2) / K, dx, dy, r: best, trusted: best > 0.3 && Math.abs(bu - gu) < S && Math.abs(bv - gv) < S });
+  }
+  const T = tiles.filter((t) => t.trusted);
+  const within = (arr, f) => arr.filter((t) => { const d = f(t); return Math.hypot(d[0], d[1]) <= TOL; }).length / Math.max(1, arr.length);
+  const raw = within(T, (t) => [t.dx, t.dy]);
+  // fit: frame(x) = base(x) + d, with d = (s-1)*(x - c) + t  (least squares, robust: two passes)
+  let fit = { s: 1, tx: 0, ty: 0 };
+  let use = T;
+  for (let pass = 0; pass < 2 && use.length >= 6; pass++) {
+    const cx = W / 2, cy = H / 2;
+    let sxx = 0, sx = 0, sdx = 0, sxdx = 0, n2 = 0, sdy = 0;
+    for (const t of use) { const ax = t.cx - cx, ay = t.cy - cy; sxx += ax * ax + ay * ay; sxdx += ax * t.dx + ay * t.dy; sdx += t.dx; sdy += t.dy; n2++; }
+    const tx = sdx / n2, ty = sdy / n2;
+    let num = 0; for (const t of use) num += (t.cx - cx) * (t.dx - tx) + (t.cy - cy) * (t.dy - ty);
+    const k = num / sxx;
+    fit = { s: 1 + k, tx, ty };
+    const res = (t) => [t.dx - (k * (t.cx - cx) + tx), t.dy - (k * (t.cy - cy) + ty)];
+    use = T.filter((t) => Math.hypot(...res(t)) <= 8);
+    fit.res = res;
+  }
+  const fitted = fit.res ? within(T, fit.res) : raw;
+  // regions with the most misaligned trusted tiles
+  const bad = T.filter((t) => Math.hypot(...(fit.res ? fit.res(t) : [t.dx, t.dy])) > TOL);
+  const where = { "far mountains": 0, "ridge": 0, "city": 0, "foreground": 0 };
+  for (const t of bad) {
+    const k = t.cy > 820 ? "foreground" : t.cx > 1150 && t.cy > 600 ? "city" : t.cy < 640 && (t.cx < 330 || t.cx > 1150) ? "far mountains" : "ridge";
+    where[k]++;
+  }
+  // overlay: base outlines magenta, frame outlines green
+  const ov = canvas(R.w, R.h), og = ov.getContext("2d"), od = og.createImageData(R.w, R.h);
+  for (let i = 0; i < R.w * R.h; i++) {
+    const a = Math.min(255, 900 * Math.hypot(R.GX[i], R.GY[i])), b = Math.min(255, 900 * Math.hypot(M.GX[i], M.GY[i]));
+    od.data[i * 4] = a; od.data[i * 4 + 1] = b; od.data[i * 4 + 2] = a; od.data[i * 4 + 3] = 255;
+  }
+  og.putImageData(od, 0, 0);
+  const blob = await new Promise((ok) => ov.toBlob(ok, "image/png"));
+  await fetch("/save?name=overlay-" + file.replace(/\.[a-z]+$/, ".png"), { method: "POST", body: blob });
+  const out = { file, tiles: T.length, raw: +(raw * 100).toFixed(1), fitted: +(fitted * 100).toFixed(1),
+    scale: +fit.s.toFixed(4), shift: [+fit.tx.toFixed(1), +fit.ty.toFixed(1)], off: where };
+  out.global = [gu / K, gv / K];
+  if (arg("warp")) await warp(file, img, T, fit);
+  log(file + ": whole-picture shift " + gu / K + "," + gv / K + " px; " + out.tiles + " tiles; within " + TOL + " px: " + out.raw + "% as is, " + out.fitted + "% after fit (scale " + out.scale +
+    ", shift " + out.shift.join(",") + "); off: " + JSON.stringify(where));
+  return out;
+}
+
+// warp=1: bend the frame onto the base along the measured tile offsets and save warped-<file>.jpg.
+// The offset field is a smooth (Gaussian, SIGMA px) average of the trusted tiles, weighted by how
+// well each matched; tiles that disagree with their neighbours by more than 8 px are dropped, and
+// open sky far from any tile falls back to the whole-picture fit. Only small, smooth moves: content
+// the generator actually redrew stays wrong and the re-check says so.
+async function warp(file, img, T, fit) {
+  const SIGMA = +(arg("sigma") || 70), cx = W / 2, cy = H / 2, k = fit.s - 1;
+  const fitAt = (x, y) => [k * (x - cx) + fit.tx, k * (y - cy) + fit.ty];
+  const med = (a) => { const s = a.slice().sort((p, q) => p - q); return s[s.length >> 1]; };
+  const good = T.filter((t) => {
+    const nb = T.filter((o) => o !== t && Math.hypot(o.cx - t.cx, o.cy - t.cy) <= 200);
+    if (nb.length < 3) return true;
+    return Math.hypot(t.dx - med(nb.map((o) => o.dx)), t.dy - med(nb.map((o) => o.dy))) <= 8;
+  });
+  const G = 16, gw = Math.ceil(W / G) + 1, gh = Math.ceil(H / G) + 1, FX = new Float32Array(gw * gh), FY = new Float32Array(gw * gh);
+  for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) {
+    const x = i * G, y = j * G, f = fitAt(x, y);
+    let sw = 0.02, sx = 0.02 * f[0], sy = 0.02 * f[1];
+    for (const t of good) {
+      const w = t.r * Math.exp(-((t.cx - x) ** 2 + (t.cy - y) ** 2) / (2 * SIGMA * SIGMA));
+      sw += w; sx += w * t.dx; sy += w * t.dy;
+    }
+    FX[j * gw + i] = sx / sw; FY[j * gw + i] = sy / sw;
+  }
+  const src = canvas(W, H), sg = src.getContext("2d"); sg.drawImage(img, 0, 0, W, H);
+  const s = sg.getImageData(0, 0, W, H).data, dst = canvas(W, H), dg = dst.getContext("2d"), od = dg.createImageData(W, H), o = od.data;
+  const lerp = (A, x, y) => { const i = Math.min(gw - 2, x / G | 0), j = Math.min(gh - 2, y / G | 0), fx = x / G - i, fy = y / G - j;
+    return (A[j * gw + i] * (1 - fx) + A[j * gw + i + 1] * fx) * (1 - fy) + (A[(j + 1) * gw + i] * (1 - fx) + A[(j + 1) * gw + i + 1] * fx) * fy; };
+  let maxd = 0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const ddx = lerp(FX, x, y), ddy = lerp(FY, x, y); maxd = Math.max(maxd, Math.hypot(ddx, ddy));
+    // past an edge, mirror back in (a starry sky reflected is invisible; a clamped one smears)
+    const ref = (v, n) => Math.min(n - 1.001, Math.max(0, v < 0 ? -v : v > n - 1 ? 2 * (n - 1) - v : v));
+    const sx = ref(x + ddx, W), sy = ref(y + ddy, H);
+    const x0 = sx | 0, y0 = sy | 0, fx = sx - x0, fy = sy - y0, p = (y * W + x) * 4;
+    for (let c = 0; c < 3; c++) {
+      const a = s[(y0 * W + x0) * 4 + c], b = s[(y0 * W + x0 + 1) * 4 + c], d = s[((y0 + 1) * W + x0) * 4 + c], e = s[((y0 + 1) * W + x0 + 1) * 4 + c];
+      o[p + c] = (a * (1 - fx) + b * fx) * (1 - fy) + (d * (1 - fx) + e * fx) * fy;
+    }
+    o[p + 3] = 255;
+  }
+  dg.putImageData(od, 0, 0);
+  const blob = await new Promise((ok) => dst.toBlob(ok, "image/jpeg", 0.95));
+  await fetch("/save?name=warped-" + file.replace(/\.[a-z]+$/, ".jpg"), { method: "POST", body: blob });
+  log(file + ": warped with " + good.length + "/" + T.length + " tiles, biggest move " + maxd.toFixed(1) + " px");
+}
+
+(async () => {
+  try {
+    const base = await load(DIR + BASE), R = grads(base);
+    let tot = 0; for (let i = 0; i < R.GX.length; i++) tot += R.GX[i] * R.GX[i] + R.GY[i] * R.GY[i]; const typical = tot / R.GX.length;
+    const mk = await load(DIR + (arg("mask") || "layers/sky-mask.png")), mc = canvas(R.w, R.h), mg = mc.getContext("2d");
+    mg.drawImage(mk, 0, 0, R.w, R.h);
+    const md = mg.getImageData(0, 0, R.w, R.h).data, mask = new Float32Array(R.w * R.h);
+    for (let i = 0; i < mask.length; i++) mask[i] = md[i * 4] / 255;
+    const files = arg("files").split(",").filter(Boolean), res = [];
+    for (const f of files) res.push(await check(f, R, base, typical, mask));
+    log("JSON " + JSON.stringify(res));
+    log("DONE");
+  } catch (e) { log("FAILED " + e); }
+})();
+</script>

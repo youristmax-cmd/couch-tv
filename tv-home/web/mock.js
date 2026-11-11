@@ -49,6 +49,11 @@
   if (arg("scenes")) cfg.home.scenes = arg("scenes").split(",");
   if (arg("secs")) cfg.home.scene_seconds = parseInt(arg("secs"), 10);
   if (arg("myscenes")) try { cfg.home.my_scenes = JSON.parse(arg("myscenes")); } catch (e) {}
+  // lat=34.0522&lon=-118.2437&tz=America/Los_Angeles&place=Los%20Angeles   where the home is (weather, the sun)
+  if (arg("lat") && arg("lon")) cfg.weather = { lat: parseFloat(arg("lat")), lon: parseFloat(arg("lon")),
+    place: arg("place") || "", timezone: arg("tz") || "auto" };
+  if (arg("mode")) cfg.home.mode = arg("mode");             // solar (default) or scenes
+  if (arg("clouds") === "0") cfg.home.clouds = { enabled: false };
   window.COUCH_CONFIG = cfg;
 
   // ---------- the launcher's updater (Updater.kt), for ?update= ----------
@@ -94,6 +99,13 @@
     ["com.spotify.tv.android", "Spotify", "#121212"], ["com.google.android.youtube.tvmusic", "YouTube Music", "#141414"],
     ["tv.twitch.android.app", "Twitch", "#4b2a8c"], ["com.mediatek.wwtv.tvcenter", "Live TV", "#2a2a30"],
     ["com.android.vending", "App Store", "#2a2a30"], ["com.android.tv.settings", "Settings", "#2a2a30"]
+  ];
+  // apps=fire: a Fire TV's packages (Netflix, YouTube, Prime Video, Hulu, Max first)
+  if (arg("apps") === "fire") apps = [
+    ["com.netflix.ninja", "Netflix", "#ffffff"], ["com.amazon.firetv.youtube", "YouTube", "#f2f2f2"],
+    ["com.amazon.avod", "Prime Video", "#0f2a3d"], ["com.hulu.plus", "Hulu", "#0b1f17"], ["com.hbo.hbonow", "Max", "#1c1c6b"],
+    ["com.disney.disneyplus", "Disney+", "#0b3f4f"], ["com.peacock.peacockfiretv", "Peacock", "#111111"],
+    ["com.apple.atve.amazon.appletv", "Apple TV", "#111111"], ["com.spotify.tv.android", "Spotify", "#121212"]
   ];
   var fresh = ["com.plexapp.android", "Plex", "#1f1f1f"];
   if (arg("newapp")) {
@@ -188,11 +200,15 @@
         if (path.indexOf("/api/app-order") === 0) {
           if (method === "POST") store.set("api.order", { order: body.order, line: body.line });
           var o = store.get("api.order");
+          // apps=fire: the order saved on the Fire TV (five on the bar)
+          if (!o && arg("apps") === "fire") o = { order: apps.map(function (a) { return a[0]; }), line: 5 };
           if (!o) return resolve({ ok: true, saved: false, line: 10, apps: [], dock_max: 10 });
           return resolve({ ok: true, saved: true, line: o.line, dock_max: 10,
             apps: o.order.map(function (p) { return { package: p, name: p }; }) });
         }
         if (path.indexOf("/api/who") === 0) return resolve({ ok: true, who: null });
+        if (path.indexOf("/api/weather") === 0) return resolve({ ok: true, temp: 18, code: { partly: 2, overcast: 3, rain: 63, showers: 81 }[arg("wx")] || 1, text: "",
+          is_day: window.Sky ? window.Sky.altitude() > 0 : true });
         if (path.indexOf("/api/settings") === 0) {
           if (method === "POST") store.set("api.settings", { settings: body.settings || {}, updated: new Date().toISOString() });
           var st = store.get("api.settings") || { settings: {}, updated: null };

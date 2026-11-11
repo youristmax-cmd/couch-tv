@@ -30,12 +30,36 @@ object Tv {
         // Never pop "Allow debugging?" on the TV from a phone tap: the first connection is started
         // on purpose, from setup. After that, reconnecting is silent.
         if (!Adb.connected && (!(Adb.everAllowed || Adb.paired) || !Adb.ensure())) throw ApiError(503,
-            "$what needs ADB on the TV. Open Couch TV on the TV and connect it (see the setup page).")
+            "$what needs ADB on the TV. Open Couch TV on the TV and connect it (see the setup page)." +
+                if (FireRemote.available) " On a Fire TV whose ADB refuses the TV itself, pair the Fire TV remote there instead." else "")
     }
+
+    /** ADB is not there (or this Fire OS refuses it from the TV), but Amazon's remote service is paired. */
+    private fun useFireRemote(): Boolean =
+        !Adb.connected && FireRemote.available && FireRemote.paired
 
     // ---------- keys and text ----------
     fun key(name: String, hold: Boolean = false): String {
         val code = Keys.resolve(name) ?: throw ApiError(400, "unknown key: $name")
+        // Fire TV: the inputs (HDMI 1, 2...) are a row on Amazon's home. Open it there, and keep this
+        // app's home watcher out of the way for 45 s while one is picked. Needs no ADB.
+        if (code == "KEYCODE_TV_INPUT" && FireHome.isFireTv) {
+            FireHome.pauseFor(45_000)
+            start(Intent("com.amazon.tv.action.NAVIGATE_TO_INPUTS"))
+            // That brings Amazon's home up on its Home tab; its Inputs tab is three to the left, and
+            // its row of inputs shows as soon as that tab has focus. Step there and onto the first
+            // input (HDMI1), so OK picks it. Through Amazon's remote service where it is paired.
+            if (FireRemote.available && FireRemote.paired) Thread {
+                Thread.sleep(1600)
+                repeat(3) { runCatching { FireRemote.key("KEYCODE_DPAD_LEFT") }; Thread.sleep(300) }
+                Thread.sleep(400)
+                runCatching { FireRemote.key("KEYCODE_DPAD_DOWN") }
+            }.start()
+            return code
+        }
+        // Media keys need no ADB: Android hands them to the app that is playing.
+        if (!Adb.connected && mediaKey(code)) return code
+        if (useFireRemote() && FireRemote.handles(code)) { FireRemote.key(code); return code }
         if (!Adb.connected && code == "KEYCODE_HOME" && startHome()) return code
         if (!Adb.connected && code in VOLUME_CODES) { volumeLocal(code); return code }
         needAdb("Pressing keys")
@@ -43,7 +67,29 @@ object Tv {
         return code
     }
 
+    private val MEDIA_CODES = mapOf(
+        "KEYCODE_MEDIA_PLAY_PAUSE" to android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+        "KEYCODE_MEDIA_PLAY" to android.view.KeyEvent.KEYCODE_MEDIA_PLAY,
+        "KEYCODE_MEDIA_PAUSE" to android.view.KeyEvent.KEYCODE_MEDIA_PAUSE,
+        "KEYCODE_MEDIA_STOP" to android.view.KeyEvent.KEYCODE_MEDIA_STOP,
+        "KEYCODE_MEDIA_NEXT" to android.view.KeyEvent.KEYCODE_MEDIA_NEXT,
+        "KEYCODE_MEDIA_PREVIOUS" to android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS,
+        "KEYCODE_MEDIA_REWIND" to android.view.KeyEvent.KEYCODE_MEDIA_REWIND,
+        "KEYCODE_MEDIA_FAST_FORWARD" to android.view.KeyEvent.KEYCODE_MEDIA_FAST_FORWARD,
+        "KEYCODE_MEDIA_SKIP_FORWARD" to android.view.KeyEvent.KEYCODE_MEDIA_SKIP_FORWARD,
+        "KEYCODE_MEDIA_SKIP_BACKWARD" to android.view.KeyEvent.KEYCODE_MEDIA_SKIP_BACKWARD,
+    )
+
+    /** Play, pause, skip: through Android's media key routing to the playing app. False for other keys. */
+    fun mediaKey(code: String): Boolean {
+        val k = MEDIA_CODES[code] ?: return false
+        audio.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, k))
+        audio.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, k))
+        return true
+    }
+
     fun text(s: String) {
+        if (useFireRemote()) { FireRemote.text(s); return }
         needAdb("Typing")
         // `input text` takes %s for a space; quote everything else for the shell.
         val arg = s.replace("%", "\\%").replace(" ", "%s").replace("'", "'\\''")
@@ -56,9 +102,17 @@ object Tv {
     } catch (e: Exception) { emptySet() }
 
     fun tvLaunchables(): List<android.content.pm.ResolveInfo> {
+        val pm = ctx.packageManager
         val q = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER)
-        return ctx.packageManager.queryIntentActivities(q, 0).distinctBy { it.activityInfo.packageName }
+        val list = pm.queryIntentActivities(q, 0).distinctBy { it.activityInfo.packageName }.toMutableList()
+        // Fire TV: apps Amazon builds in with only a phone-style launcher entry (Prime Video)
+        if (FireHome.isFireTv) for (p in FIRE_EXTRA) if (list.none { it.activityInfo.packageName == p }) {
+            pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setPackage(p), 0)
+                .firstOrNull()?.let { list.add(it) }
+        }
+        return list
     }
+    private val FIRE_EXTRA = listOf("com.amazon.avod")
 
     /** Opens an app. ADB when connected (works from the background on every TV), else an intent. */
     fun launchPackage(pkg: String): String {
@@ -186,7 +240,12 @@ object Tv {
 
     /** Volume keys go through ADB when it is on (so HDMI-CEC soundbars follow), else the audio service. */
     fun volumeKey(code: String) {
-        if (Adb.connected) Adb.quick("input keyevent $code") else volumeLocal(code)
+        when {
+            Adb.connected -> Adb.quick("input keyevent $code")
+            // Amazon's remote service sends volume the way the Fire TV remote does (CEC soundbars follow).
+            useFireRemote() -> runCatching { FireRemote.key(code) }.onFailure { volumeLocal(code) }
+            else -> volumeLocal(code)
+        }
     }
 
     fun setLevel(level: Int) {
@@ -198,6 +257,7 @@ object Tv {
 
     // ---------- power ----------
     fun powerOff() {
+        if (useFireRemote()) { FireRemote.key("KEYCODE_SLEEP"); return }
         needAdb("Turning the TV off")
         Adb.quick("input keyevent KEYCODE_SLEEP")
         Thread.sleep(1500)

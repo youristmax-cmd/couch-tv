@@ -55,6 +55,17 @@
     <div class="msg" id="adb-msg" role="status"></div>
   </section>
 
+  <section class="card" id="fire-card" style="display:none">
+    <h2>Fire TV remote (when ADB will not connect)</h2>
+    <p>Some Fire OS versions refuse ADB from the TV itself. Couch TV can then press keys and type through
+      Amazon's own remote service on the TV, the one the Fire TV phone app uses. It stays on the TV.</p>
+    <p class="status" id="fire-status">Checking…</p>
+    <button id="fire-pin">Show a PIN on the TV</button>
+    <label for="fire-code">PIN from the TV (4 digits)</label><input id="fire-code" inputmode="numeric" maxlength="4" autocomplete="one-time-code">
+    <div class="row"><button class="go" id="fire-pair">Pair</button><button id="fire-forget">Unpair</button></div>
+    <div class="msg" id="fire-msg" role="status"></div>
+  </section>
+
   <section class="card">
     <h2>Household</h2>
     <label for="tv-name">TV name</label><input id="tv-name" maxlength="30">
@@ -104,6 +115,7 @@
       $('ask-state').textContent = j.ask.has_key ? 'A key is saved. Model: ' + j.ask.model + '.' : 'No key saved.';
       $('phones').textContent = j.phones + (j.phones === 1 ? ' phone is' : ' phones are') + ' paired with this TV.';
       showAdb(j.adb);
+      if (j.fire_remote) showFire(j.fire_remote);
       // Android 13+ (most Google TVs): pairing first, 5555 second. Older TVs: the other way round.
       if (j.adb.sdk < 30) { $('route-wd').style.display = 'none'; }
       else if (j.adb.sdk < 33) { $('routes').insertBefore($('route-tcp'), $('route-wd')); }
@@ -125,6 +137,27 @@
     api('POST', '/api/adb/pair', port ? { code: code, port: port } : { code: code })
       .then(function (j) { showAdb(j.adb); $('adb-msg').textContent = j.connected ? 'Paired and connected.' : 'Paired. Connecting next.'; })
       .catch(function (e) { $('adb-msg').textContent = e.message; });
+  };
+  function showFire(f) {
+    if (!f.fire_tv) return;
+    $('fire-card').style.display = '';
+    var s = $('fire-status');
+    if (f.paired) { s.className = 'status ok'; s.textContent = 'Paired. Keys and typing work without ADB.' + (f.error ? ' Last problem: ' + f.error : ''); }
+    else { s.className = 'status bad'; s.textContent = 'Not paired.'; }
+  }
+  $('fire-pin').onclick = function () {
+    $('fire-msg').textContent = 'Asking the TV for a PIN. Look at the TV.';
+    api('POST', '/api/fire-remote/pin', {}).then(function () { $('fire-msg').textContent = 'Type the PIN shown on the TV, then Pair. It only lasts about a minute.'; $('fire-code').focus(); })
+      .catch(function (e) { $('fire-msg').textContent = e.message; });
+  };
+  $('fire-pair').onclick = function () {
+    var pin = $('fire-code').value.replace(/\D/g, '');
+    if (pin.length !== 4) { $('fire-msg').textContent = 'The PIN has 4 digits.'; return; }
+    api('POST', '/api/fire-remote/pair', { pin: pin }).then(function (f) { $('fire-code').value = ''; showFire(f); $('fire-msg').textContent = 'Paired.'; })
+      .catch(function (e) { $('fire-msg').textContent = e.message; });
+  };
+  $('fire-forget').onclick = function () {
+    api('POST', '/api/fire-remote/forget', {}).then(function (f) { showFire(f); $('fire-msg').textContent = 'Unpaired.'; });
   };
   $('save').onclick = function () {
     var people = $('people').value.split(',').map(function (s) { return s.trim(); }).filter(Boolean).map(function (n, i) { return { id: 'person' + (i + 1), name: n }; });

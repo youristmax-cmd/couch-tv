@@ -37,4 +37,9 @@ export const Grip = (p) => <I d="M5 9h14M5 15h14" {...p} />;
 export const Send = (p) => <I d="M12 19V5M6 11l6-6 6 6" {...p} />;
 export const Wifi = (p) => <I {...p}><path d="M2 8.5a15 15 0 0 1 20 0M5.5 12.2a10 10 0 0 1 13 0M9 15.8a5 5 0 0 1 6 0" /><circle cx="12" cy="19" r="1" fill="currentColor" /></I>;
 export const Sparkle = (p) => <I d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" {...p} />;
+// The navy remote: the TV's Back key (a return arrow), All apps (nine dots), Ask (two sparkles).
+export const Return = (p) => <I d="M9 14l-4-4 4-4M5 10h8a6 6 0 0 1 0 12h-2" {...p} />;
+export const Left = (p) => <I d="M15 6l-6 6 6 6" {...p} />;
+export const Apps = (p) => <I {...p} stroke="none" fill="currentColor">{[5, 12, 19].flatMap((y) => [5, 12, 19].map((x) => <circle key={`${x}-${y}`} cx={x} cy={y} r="2" />))}</I>;
+export const Sparkles = (p) => <I {...p} stroke="none" fill="currentColor"><path d="M12 2l1.8 5.4L19 9l-5.2 1.6L12 16l-1.8-5.4L5 9l5.2-1.6z" /><path d="M19 15l.9 2.6 2.6.9-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9z" /></I>;
 export const People = (p) => <I {...p}><circle cx="9" cy="8" r="3.2" /><path d="M3 19.5a6 6 0 0 1 12 0" /><circle cx="17" cy="9" r="2.6" /><path d="M15.5 14.2a5 5 0 0 1 5.5 4.8" /></I>;

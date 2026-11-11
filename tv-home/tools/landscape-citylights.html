@@ -1,0 +1,51 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>landscape city lights</title>
+<!--
+Makes frame-01e.jpg: the deep-night frame with the brighter city lights of the astronomical-twilight
+frame. The lights come in with "lighten" (each pixel keeps the brighter of the two), only below the
+skyline (sky mask), only over the city, and only where frame-02 is bright (the lights themselves), so the stars, the Milky Way and the
+dark hills stay frame-01's own. The home shows it in the evening and dissolves to frame-01 (lights
+dimmed) at manifest "city_dim" (22:00).
+
+Run with a server that serves the repo and saves POST /save?name=<file>:
+  open http://127.0.0.1:<port>/tv-home/tools/landscape-citylights.html?land=la-hills-v2
+-->
+<script>
+"use strict";
+const land = (location.search.match(/land=([a-z0-9-]+)/) || [])[1] || "la-hills-v2";
+const SRC = "/tv-home/web/landscape/" + land + "/", W = 1920, H = 1080;
+// the city: a box with soft edges (x0, y0, x1, y1, feather)
+const CITY = [1080, 600, 1920, 1080, 120];
+// brightness ramp (0-255) for what counts as a light
+const LUM0 = 70, LUM1 = 130;
+function load(u) { return new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(u); i.src = u; }); }
+function canvas() { const c = document.createElement("canvas"); c.width = W; c.height = H; return c; }
+(async () => {
+  const [f1, f2, mk] = await Promise.all([load(SRC + "frame-01.jpg"), load(SRC + "frame-02.jpg"), load(SRC + "layers/sky-mask.png")]);
+  // weight: below the skyline x inside the soft city box
+  const m = canvas(), mg = m.getContext("2d"); mg.drawImage(mk, 0, 0, W, H);
+  const md = mg.getImageData(0, 0, W, H).data;
+  const lights = canvas(), lg = lights.getContext("2d"); lg.drawImage(f2, 0, 0, W, H);
+  const ld = lg.getImageData(0, 0, W, H);
+  const [x0, y0, x1, y1, fe] = CITY;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = (y * W + x) * 4;
+    const land = 1 - md[i] / 255;
+    const bx = Math.min(1, Math.max(0, (x - x0) / fe)) * Math.min(1, Math.max(0, (x1 - x) / fe + (x1 >= W ? 1 : 0)));
+    const by = Math.min(1, Math.max(0, (y - y0) / fe));
+    // only lights: pixels clearly brighter than the dark hills and far mountains around them
+    const lum = 0.299 * ld.data[i] + 0.587 * ld.data[i + 1] + 0.114 * ld.data[i + 2];
+    const light = Math.min(1, Math.max(0, (lum - LUM0) / (LUM1 - LUM0)));
+    ld.data[i + 3] = Math.round(255 * land * bx * by * light);
+  }
+  lg.putImageData(ld, 0, 0);
+  const out = canvas(), g = out.getContext("2d");
+  g.drawImage(f1, 0, 0, W, H);
+  g.globalCompositeOperation = "lighten";
+  g.drawImage(lights, 0, 0);
+  const b = await new Promise((ok) => out.toBlob(ok, "image/jpeg", 0.95));
+  await fetch("/save?name=frame-01e.jpg", { method: "POST", body: b });
+  console.log("CITY done " + Math.round(b.size / 1024) + " KB");
+})();
+</script>

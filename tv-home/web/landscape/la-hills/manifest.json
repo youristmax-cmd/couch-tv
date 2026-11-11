@@ -1,0 +1,168 @@
+{
+  "name": "la-hills",
+  "version": 1,
+  "size": [
+    1920,
+    1080
+  ],
+  "frames": [
+    {
+      "file": "frame-01.jpg",
+      "phase": "night",
+      "altitude": -20,
+      "period": "both",
+      "description": "Deep night, Milky Way",
+      "align": [
+        1.005,
+        -2,
+        -4
+      ]
+    },
+    {
+      "file": "frame-02.jpg",
+      "phase": "astronomical-twilight",
+      "altitude": -15,
+      "period": "both",
+      "description": "Astronomical twilight"
+    },
+    {
+      "file": "frame-03.jpg",
+      "phase": "nautical-twilight",
+      "altitude": -9,
+      "period": "both",
+      "description": "Nautical twilight"
+    },
+    {
+      "file": "frame-04.jpg",
+      "phase": "blue-hour",
+      "altitude": -3,
+      "period": "both",
+      "description": "Civil twilight / blue hour"
+    },
+    {
+      "file": "frame-05.jpg",
+      "phase": "sunrise",
+      "altitude": 0,
+      "period": "am",
+      "description": "Sunrise, sun on horizon right"
+    },
+    {
+      "file": "frame-06.jpg",
+      "phase": "golden-am",
+      "altitude": 10,
+      "period": "am",
+      "description": "Golden hour, morning",
+      "align": [
+        1.11,
+        -61,
+        0
+      ]
+    },
+    {
+      "file": "frame-07.jpg",
+      "phase": "mid-morning",
+      "altitude": 25,
+      "period": "am",
+      "description": "Mid-morning",
+      "align": [
+        1.11,
+        -61,
+        2
+      ]
+    },
+    {
+      "file": "frame-08.jpg",
+      "phase": "midday",
+      "altitude": 40,
+      "period": "both",
+      "description": "Midday (base frame)"
+    },
+    {
+      "file": "frame-10.jpg",
+      "phase": "golden-pm",
+      "altitude": 10,
+      "period": "pm",
+      "description": "Late golden hour / dusk, sun left"
+    }
+  ],
+  "notes": [
+    "frame-09 (sunset, sun on horizon, PM) not generated: reuse frame-05 for PM altitude 0 until supplied.",
+    "Sources 1672x941 (frame-08: 1536x864) resampled to 1920x1080 with Lanczos + light unsharp mask.",
+    "align: [scale, x, y] in 1920x1080 px (transform-origin 0 0) lines a frame up with its neighbours. Frames 06 and 07 came out about 10% wider; 07 is fitted to 06 (they crossfade at golden hour into mid-morning) and checked by eye against 06 and 08. The frames are redrawn, not just relit, so no alignment is exact: sky.js shows one frame at a time and dissolves between them.",
+    "transitions: for each handover A->B, mid-a = half-way light (blurred A and B mixed) + A's fine detail, mid-b = the same light + B's detail (made by tv-home/tools/landscape-transitions.html). The home plays A -> mid-a -> mid-b -> B: the light moves with one frame's detail at a time, and only the short mid-a -> mid-b step mixes two drawings."
+  ],
+  "transitions": [
+    {
+      "between": [
+        "frame-01.jpg",
+        "frame-02.jpg"
+      ],
+      "a": "mid-01-02-a.jpg",
+      "b": "mid-01-02-b.jpg"
+    },
+    {
+      "between": [
+        "frame-02.jpg",
+        "frame-03.jpg"
+      ],
+      "a": "mid-02-03-a.jpg",
+      "b": "mid-02-03-b.jpg"
+    },
+    {
+      "between": [
+        "frame-03.jpg",
+        "frame-04.jpg"
+      ],
+      "a": "mid-03-04-a.jpg",
+      "b": "mid-03-04-b.jpg"
+    },
+    {
+      "between": [
+        "frame-04.jpg",
+        "frame-05.jpg"
+      ],
+      "a": "mid-04-05-a.jpg",
+      "b": "mid-04-05-b.jpg"
+    },
+    {
+      "between": [
+        "frame-05.jpg",
+        "frame-06.jpg"
+      ],
+      "a": "mid-05-06-a.jpg",
+      "b": "mid-05-06-b.jpg"
+    },
+    {
+      "between": [
+        "frame-06.jpg",
+        "frame-07.jpg"
+      ],
+      "a": "mid-06-07-a.jpg",
+      "b": "mid-06-07-b.jpg"
+    },
+    {
+      "between": [
+        "frame-07.jpg",
+        "frame-08.jpg"
+      ],
+      "a": "mid-07-08-a.jpg",
+      "b": "mid-07-08-b.jpg"
+    },
+    {
+      "between": [
+        "frame-05.jpg",
+        "frame-10.jpg"
+      ],
+      "a": "mid-05-10-a.jpg",
+      "b": "mid-05-10-b.jpg"
+    },
+    {
+      "between": [
+        "frame-10.jpg",
+        "frame-07.jpg"
+      ],
+      "a": "mid-10-07-a.jpg",
+      "b": "mid-10-07-b.jpg"
+    }
+  ]
+}

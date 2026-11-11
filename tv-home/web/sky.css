@@ -1,0 +1,66 @@
+/* The solar landscape (sky.js). Inside .sky-fit everything is in 1080p device pixels: sky.js scales
+   that box to the screen once. Only transform and opacity ever change. */
+.sky { display: none; }
+.mode-solar .sky { display: block; position: fixed; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden; pointer-events: none;
+  background: #05070d; opacity: 0; transition: opacity 1200ms ease-out; }
+.mode-solar .sky.on { opacity: 1; }
+.mode-solar .scenes, .mode-solar .bg { display: none; }
+
+.sky-fit { position: absolute; top: 0; left: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
+/* one very slow Ken Burns on the whole stack */
+.sky-kb { position: absolute; top: 0; left: 0; width: 1920px; height: 1080px; overflow: hidden;
+  transform-origin: 50% 50%; }   /* Ken Burns: sky.js steps it, 1.00 to 1.04 and back, ten minutes each way */
+
+.sky-frames, .sky-slot, .sky-stars, .sky-spin, .sky-fx, .sky-win {
+  position: absolute; top: 0; left: 0; width: 1920px; height: 1080px; }
+.sky-slot { opacity: 0; }
+.sky-img { position: absolute; top: 0; left: 0; width: 1920px; height: 1080px; display: block; }
+
+/* the canvases (sky.js): small backing stores, stretched to their place in the 1920x1080 box */
+.sky-dim, .sky-clouds, .sky-sun { position: absolute; top: 0; left: 0; width: 1920px; height: 1080px; }
+/* night: the photo's own sky dims a little so the drawn stars, which move, carry it */
+.sky-dim { opacity: 0; }
+/* the Milky Way band of frame-01, breathing between 0.85 and 1 over three minutes */
+.sky-mw { position: absolute; left: 600px; top: 0; width: 1200px; height: 620px; opacity: 0; }
+.sky-mw-c { display: block; width: 1200px; height: 620px; }
+
+.sky-stars { opacity: 0; }
+/* turns about the celestial pole, off the top left */
+.sky-spin { transform-origin: -180px -360px; }
+.sky-canvas { position: absolute; top: 0; left: 0; width: 1920px; height: 1080px; }
+.sky-twi { position: absolute; top: 0; left: 0; border-radius: 50%; }
+
+.sky-fx { opacity: 0; }
+.sky-ss { position: absolute; top: 0; left: 0; transform-origin: 0 50%; }
+.sky-ss-trail { position: absolute; top: -1px; left: 0; height: 2px; border-radius: 1px; transform-origin: 100% 50%; will-change: transform, opacity;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.55) 70%, #fff); opacity: 0; }
+.sky-ss-trail::after { content: ""; position: absolute; right: -1px; top: 0; width: 2px; height: 2px; border-radius: 50%; background: #fff;
+  box-shadow: 0 0 4px 1px rgba(255, 255, 255, 0.8); }
+.sky-ss.bright .sky-ss-trail { top: -1.5px; height: 3px; background: linear-gradient(90deg, rgba(220, 235, 255, 0), rgba(230, 240, 255, 0.75) 60%, #fff); }
+.sky-ss.bright .sky-ss-trail::after { width: 3px; height: 3px; box-shadow: 0 0 7px 2px rgba(255, 255, 255, 0.9); }
+.sky-sat { position: absolute; top: -1px; left: -1px; width: 2px; height: 2px; border-radius: 50%; background: #fff; opacity: 0; will-change: transform, opacity; }
+.sky-plane { position: absolute; top: -1.5px; left: -1.5px; width: 3px; height: 3px; border-radius: 50%; background: #fff; opacity: 0;
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.7); will-change: transform, opacity; }
+.sky-plane-red { position: absolute; left: -6px; top: 3px; width: 2px; height: 2px; border-radius: 50%; background: #ff3b30;
+  box-shadow: 0 0 3px 1px rgba(255, 59, 48, 0.8); }
+
+/* the city: frame-01's lights over themselves (screen), shimmering between 0.92 and 1 */
+.sky-city { position: absolute; left: 1180px; top: 640px; width: 740px; height: 380px; opacity: 0; mix-blend-mode: screen; }
+.sky-city-c { display: block; width: 740px; height: 380px; opacity: 0.96; }
+.sky-win { opacity: 0; }
+.sky-window { position: absolute; top: 0; left: 0; width: 2px; height: 3px; background: #ffd9a3;
+  box-shadow: 0 0 3px 1px rgba(255, 196, 120, 0.55); }
+
+
+/* dev tools (browser preview, or ?dev=1) */
+.sky-dev { position: fixed; left: 1rem; bottom: 0.75rem; z-index: 50; display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.4rem 0.75rem; border-radius: 0.75rem; background: rgba(0, 0, 0, 0.55); color: #fff;
+  font: 500 0.8125rem/1.2 -apple-system, system-ui, sans-serif; pointer-events: auto; }
+.sky-dev input { width: 22rem; }
+.sky-dev button { font: inherit; padding: 0.2rem 0.6rem; border-radius: 0.5rem; border: 0; }
+.sky-dev-info { white-space: pre; font-variant-numeric: tabular-nums; min-width: 34rem; }
+.shot .sky-dev { display: none; }
+
+/* the two frame slots carry z-index 1/2 between themselves only: keep them under every layer above */
+.sky-frames { z-index: 0; }
+.sky-sun { mix-blend-mode: screen; }
