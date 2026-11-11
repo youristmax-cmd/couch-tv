@@ -105,6 +105,8 @@ S.en = {
   send_to_tv: 'Send to TV',
   subtitles: 'Subtitles',
   input: 'Input',
+  choose_app: 'App for this spot',
+  same_as_tv: 'Same as the TV',
   settings: 'Settings',
   arrange_apps: 'Arrange apps',
   people: 'People',
@@ -241,6 +243,8 @@ S.es = {
   send_to_tv: 'Enviar al televisor',
   subtitles: 'Subtítulos',
   input: 'Entrada',
+  choose_app: 'App para este lugar',
+  same_as_tv: 'Igual que la tele',
   settings: 'Ajustes',
   arrange_apps: 'Ordenar apps',
   people: 'Perfiles',
@@ -435,6 +439,8 @@ S.it = {
   send_to_tv: 'Invia alla TV',
   subtitles: 'Sottotitoli',
   input: 'Ingresso',
+  choose_app: 'App per questo posto',
+  same_as_tv: 'Come la TV',
   settings: 'Impostazioni',
   arrange_apps: 'Ordina le app',
   people: 'Persone',
@@ -632,7 +638,13 @@ function apply() {
 try { document.documentElement.lang = LANGS.find((l) => l.id === lang).locale; } catch { /* no document */ }
 
 export const choice = () => (known(read(KEY)) ? read(KEY) : 'auto');
-export const locale = () => LANGS.find((l) => l.id === lang).locale;
+// Dates and times: the phone's own region when it speaks the chosen language (an American phone
+// reads "Tuesday November 10", an Australian one "Tuesday 10 November"), else the language's own.
+export const locale = () => {
+  const own = LANGS.find((l) => l.id === lang).locale;
+  const phone = typeof navigator !== 'undefined' ? navigator.language : '';
+  return phone && phone.split('-')[0].toLowerCase() === own.split('-')[0] ? phone : own;
+};
 export function setChoice(c) { write(KEY, known(c) ? c : 'auto'); apply(); }
 export function setTvLang(id) { if (known(id)) { write(TV_KEY, id); apply(); } }
 

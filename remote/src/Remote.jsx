@@ -31,9 +31,33 @@ export function WhoSheet({ open, onClose, people, who, setWho }) {
 
 export const whoName = (people, who) => whoOptions(people).find((o) => o.id === who)?.name;
 
-// The top line: the TV's name with a status dot and "On · Netflix" under it, then who is
-// watching, the TV menu and the power button.
-export function TopBar({ people, tvName, who, onWho, tv, appInfo, reach, sleepLeft, onPower, onMore }) {
+// Choose the app for one spot in the phone's app row (opened by holding a tile). Picking an app
+// that is already in the row swaps the two. "Same as the TV" goes back to the TV's own order.
+export function SlotSheet({ open, onClose, apps, row, slot, onPick, onReset }) {
+  const shown = rowApps(apps, row);
+  const cur = shown[slot];
+  return (
+    <Sheet open={open} onClose={onClose} title={t('choose_app')} className="who-sheet slot-sheet">
+      <div role="radiogroup" aria-label={t('choose_app')}>
+        {(apps || []).map((a) => (
+          <button key={a.id} role="radio" aria-checked={cur?.id === a.id} className={`who-row ${cur?.id === a.id ? 'on' : ''}`}
+            onClick={() => { tick(); onPick(a.id); }}>
+            <span className="slot-pic" style={a.colour ? { '--tile': a.colour } : undefined}><AppPic app={a} /></span>
+            <span className="who-name">{a.name}</span>
+            {cur?.id === a.id && <span className="who-tick" aria-hidden="true">&#10003;</span>}
+          </button>
+        ))}
+      </div>
+      {row && <button type="button" className="pill card-2 slot-reset" onClick={() => { tick(); onReset(); }}>{t('same_as_tv')}</button>}
+    </Sheet>
+  );
+}
+
+// The top line: a status dot and the TV's name (and what is wrong, when something is), then who
+// is watching (only with two or more people), the moon (the TV menu: sleep timer and the rest,
+// with the minutes left when a timer runs) and the Wi-Fi mark (red when the TV cannot be reached).
+// Power is in the key row under the pad.
+export function TopBar({ people, tvName, who, onWho, tv, appInfo, reach, sleepLeft, onMore }) {
   const on = reach !== false && tv?.tv_connected && tv.power === 'on' && !tv.waking;
   const appName = tv?.app?.id === 'home' ? t('home') : (appInfo?.name || tv?.app?.name);
   const status = reach === false ? t('not_connected')
@@ -43,26 +67,29 @@ export function TopBar({ people, tvName, who, onWho, tv, appInfo, reach, sleepLe
           : tv.power === 'off' ? t('off')
             : appName ? `${t('on')} · ${appName}` : t('on');
   const dot = reach === false ? 'err' : on ? 'on' : tv?.waking ? 'waking' : 'idle';
-  const showWho = (people || []).length > 0;
+  const showWho = (people || []).length > 1;
   const cur = whoOptions(people).find((o) => o.id === who);
   return (
     <header className="topbar">
       <div className="tvname">
         <span className={`status-dot ${dot}`} aria-hidden="true" />
-        <span className="tvname-text">
-          <b>{tvName || t('tv')}</b>
-          <span>{status}{sleepLeft && <span className="sleep-left"> · <Ic.Moon size={12} /> {sleepLeft}</span>}</span>
-        </span>
+        <b className="tvname-text">{tvName || t('tv')}</b>
+        {on ? <span className="sr-only">{status}</span> : <span className="tv-status">{status}</span>}
       </div>
       {showWho && cur && (
-        <button className="round card who-btn" aria-haspopup="dialog" aria-label={t('whos_watching_change', { name: cur.name })}
+        <button className="top-btn who-btn" aria-haspopup="dialog" aria-label={t('whos_watching_change', { name: cur.name })}
           onClick={() => { tick(); onWho(); }}>
-          <span className="person-dot who-dot" style={{ background: cur.colour || 'var(--card-2)' }}>{cur.id === 'both' ? <Ic.People size={16} /> : cur.name.slice(0, 1).toUpperCase()}</span>
+          <span className="person-dot who-dot" style={{ background: cur.colour || 'var(--card-2)' }}>{cur.id === 'both' ? <Ic.People size={14} /> : cur.name.slice(0, 1).toUpperCase()}</span>
         </button>
       )}
-      <button className="round card" aria-label={t('more_controls')} onClick={() => { tick(); onMore(); }}><Ic.More size={20} /></button>
-      <button className={`round card power ${tv?.power === 'on' ? 'is-on' : ''}`} aria-label={tv?.power === 'on' ? t('turn_off') : t('turn_on')}
-        onClick={() => { tick(); onPower(); }}><Ic.Power size={20} /></button>
+      <button className={`top-btn ${sleepLeft ? 'is-set' : ''}`} aria-haspopup="dialog"
+        aria-label={sleepLeft ? `${t('sleep_timer')} · ${sleepLeft}. ${t('more_controls')}` : t('more_controls')}
+        onClick={() => { tick(); onMore(); }}>
+        <Ic.Moon size={16} />{sleepLeft && <span className="top-left">{sleepLeft}</span>}
+      </button>
+      <span className={`top-mark ${reach === false ? 'err' : ''}`} role="img" aria-label={reach === false ? t('not_connected') : status}>
+        <Ic.Wifi size={16} />
+      </span>
     </header>
   );
 }
@@ -89,7 +116,9 @@ function useMinute() {
   return now;
 }
 
-export function ClockWeather({ settings, weather }) {
+// The date and the weather on one line ("Tuesday November 10 · 66° Clear"), the big clock under
+// it, as on the TV home. `compact` is the smaller one at the top of Ask.
+export function ClockWeather({ settings, weather, compact = false }) {
   const now = useMinute();
   const hour12 = settings?.clock === '12h' ? true : settings?.clock === '24h' ? false : undefined;
   let parts = [];
@@ -97,18 +126,19 @@ export function ClockWeather({ settings, weather }) {
   const time = parts.filter((p) => p.type !== 'dayPeriod').map((p) => p.value).join('').trim()
     || now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   const period = parts.find((p) => p.type === 'dayPeriod')?.value;
+  let date = '';
+  try { date = new Intl.DateTimeFormat(locale(), { weekday: 'long', month: 'long', day: 'numeric' }).format(now).replace(/,/g, ''); } catch { date = now.toDateString(); }
+  date = date.charAt(0).toUpperCase() + date.slice(1);
   const w = settings?.wx_show !== false && weather && weather.temp != null ? weather : null;
   const temp = w ? `${settings?.wx_unit === 'f' ? Math.round((w.temp * 9) / 5 + 32) : w.temp}°` : null;
   const text = w ? (WMO_KEY[w.code] ? t(WMO_KEY[w.code]) : w.text) : null;
   return (
-    <section className="clock-row">
+    <section className={`clock-row ${compact ? 'compact' : ''}`}>
+      <p className="clock-date">
+        <span>{date}</span>
+        {w && <><span className="clock-sep" aria-hidden="true">·</span><span>{[temp, text].filter(Boolean).join(' ')}</span></>}
+      </p>
       <p className="clock"><time dateTime={now.toISOString()}>{time}</time>{period && <small>{period}</small>}</p>
-      {w && (
-        <p className="weather" aria-label={[temp, text, w.place].filter(Boolean).join(', ')}>
-          <span className="weather-temp" aria-hidden="true">{temp}</span>
-          {(text || w.place) && <span className="weather-sub" aria-hidden="true">{[text, w.place].filter(Boolean).join(' · ')}</span>}
-        </p>
-      )}
     </section>
   );
 }
@@ -196,24 +226,60 @@ export function NowCard({ tv, appInfo, item, serviceName, onKey, onResume }) {
           <span className="now-title">{item.title}</span>
           {sub && <span className="now-sub">{sub}</span>}
         </span>
-        <button className="round accent resume" aria-label={t('resume_title', { title: item.title })}
+        <button className="round solid resume" aria-label={t('resume_title', { title: item.title })}
           onClick={() => { tick(); onResume(item); }}><Ic.Play size={20} /></button>
       </div>
     </section>
   );
 }
 
-// The first four apps, in the TV's own order, then All apps (the full list on Watch).
-export function AppRow({ apps, onLaunch, onAll }) {
+// An app's picture: the bundled logo, else the TV's own icon for that app (the on-TV app serves
+// the same square icon its home's dock shows, at /icon/<package>), else its name.
+export function AppPic({ app }) {
+  const [failed, setFailed] = useState(false);
+  const src = logoFor(app) || (app.package && !failed ? `/icon/${encodeURIComponent(app.package)}.png` : null);
+  return src ? <img src={src} alt="" onError={() => setFailed(true)} /> : <span className="app-word">{app.name}</span>;
+}
+
+// One app tile. A tap opens the app; holding it (half a second) chooses another app for this spot.
+function AppKey({ app, onLaunch, onHold }) {
+  const hold = useRef({ timer: null, held: false, x: 0, y: 0 });
+  const stop = () => clearTimeout(hold.current.timer);
+  useEffect(() => stop, []);
+  return (
+    <button className="app-key" style={app.colour ? { '--tile': app.colour } : undefined}
+      aria-label={t('open_app', { app: app.name })}
+      onPointerDown={(e) => { stop(); const h = hold.current; h.held = false; h.x = e.clientX; h.y = e.clientY; h.timer = setTimeout(() => { h.held = true; tick(); onHold(); }, 550); }}
+      onPointerMove={(e) => { const h = hold.current; if (Math.hypot(e.clientX - h.x, e.clientY - h.y) > 10) stop(); }}
+      onPointerUp={stop} onPointerCancel={stop} onContextMenu={(e) => e.preventDefault()}
+      onClick={() => { if (hold.current.held) { hold.current.held = false; return; } tick(); onLaunch(app); }}>
+      <AppPic app={app} />
+    </button>
+  );
+}
+
+// The five apps in the row: this phone's own choices first (held tiles, saved on the phone), then
+// the rest in the TV's own order.
+export function rowApps(apps, row) {
+  const list = apps || [];
+  const byId = Object.fromEntries(list.map((a) => [a.id, a]));
+  const out = [];
+  (row || []).forEach((id, i) => { if (i < 5 && byId[id] && !out.includes(byId[id])) out[i] = byId[id]; });
+  const rest = list.filter((a) => !out.includes(a));
+  for (let i = 0; i < Math.min(5, list.length); i += 1) if (!out[i]) out[i] = rest.shift();
+  return out.filter(Boolean).slice(0, 5);
+}
+
+// Five app tiles in one glass pill. The full list is on Watch (swipe left). With fewer than five
+// apps, All apps fills the row.
+export function AppRow({ apps, row, onLaunch, onAll, onHold }) {
   if (!apps?.length) return null;
   return (
-    <nav className="app-row" aria-label={t('apps')}>
-      {apps.slice(0, 4).map((a) => (
-        <button key={a.id} className="app-key card" aria-label={t('open_app', { app: a.name })} onClick={() => { tick(); onLaunch(a); }}>
-          {logoFor(a) ? <img src={logoFor(a)} alt="" /> : <span className="app-word" style={a.colour ? { '--brand': a.colour } : undefined}>{a.name}</span>}
-        </button>
-      ))}
-      <button className="app-key card all-apps" aria-label={t('all_apps')} onClick={() => { tick(); onAll(); }}><Ic.Apps size={22} /></button>
+    <nav className="app-row glass" aria-label={t('apps')}>
+      {rowApps(apps, row).map((a, i) => <AppKey key={a.id} app={a} onLaunch={onLaunch} onHold={() => onHold(i)} />)}
+      {apps.length < 5 && (
+        <button className="app-key all-apps" aria-label={t('all_apps')} onClick={() => { tick(); onAll(); }}><Ic.Apps size={22} /></button>
+      )}
     </nav>
   );
 }
@@ -268,7 +334,7 @@ export function Pad({ onKey, offState, wakeError, onWake, onRetry, tvName, onLiv
         {wakeError && offState !== 'waking' && <p className="wake-err">{wakeError}</p>}
       </>);
     }
-    return <div className="pad-zone"><div className="pad-msg card" aria-live="polite">{msg}</div></div>;
+    return <div className="pad-zone"><div className="pad-msg glass" aria-live="polite">{msg}</div></div>;
   }
 
   const down = (e) => {
@@ -321,7 +387,7 @@ export function Pad({ onKey, offState, wakeError, onWake, onRetry, tvName, onLiv
 
   return (
     <div className="pad-zone">
-      <div ref={ref} className="pad card" role="group" aria-label={t('pad_label')}
+      <div ref={ref} className="pad glass" role="group" aria-label={t('pad_label')}
         onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={cancel}>
         {spot && <div className="spot" style={{ transform: `translate(${spot.x}px, ${spot.y}px)` }} />}
         {['up', 'left', 'right', 'down'].map((d) => (
@@ -329,7 +395,7 @@ export function Pad({ onKey, offState, wakeError, onWake, onRetry, tvName, onLiv
             <Ic.Chevron className="chev" size={22} strokeWidth="2.4" />
           </button>
         ))}
-        <button type="button" className={`pad-ok accent ${lit === 'ok' ? 'lit' : ''}`} aria-label={t('select')} onClick={click('ok')}>OK</button>
+        <button type="button" className={`pad-ok ${lit === 'ok' ? 'lit' : ''}`} aria-label={t('select')} onClick={click('ok')}>OK</button>
       </div>
     </div>
   );
@@ -367,47 +433,43 @@ function useRepeat(fn) {
   };
 }
 
-// Under the pad, in thumb reach: back, home, play or pause, the keyboard (Type on the TV), then
-// the volume pill and mute.
-export function Controls({ tv, onKey, onVolume, onType }) {
+// Under the pad, in thumb reach: one glass pill of keys (back, home, play or pause, the keyboard
+// for Type on the TV, power), then the volume pill, mute and Ask (a round button that opens the
+// Ask screen with the keyboard up). With the TV off only power and Ask stay live.
+export function Controls({ tv, onKey, onVolume, onType, onPower, onAsk }) {
   const v = tv?.volume;
   const st = tv?.playing?.state;
   const upR = useRepeat(() => onVolume('up'));
   const downR = useRepeat(() => onVolume('down'));
   return (
     <div className="controls">
-      <div className="key-row">
-        <button className="key card" aria-label={t('back')} onClick={() => { tick(); onKey('back'); }}><Ic.Return /></button>
-        <button className="key card" aria-label={t('home')} onClick={() => { tick(); onKey('home'); }}><Ic.Home /></button>
-        <button className="key card" aria-label={st === 'playing' ? t('pause') : st === 'paused' ? t('play') : t('play_pause')}
+      <div className="key-row glass">
+        <button className="key off-dim" aria-label={t('back')} onClick={() => { tick(); onKey('back'); }}><Ic.Return /></button>
+        <button className="key off-dim" aria-label={t('home')} onClick={() => { tick(); onKey('home'); }}><Ic.Home /></button>
+        <button className="key off-dim" aria-label={st === 'playing' ? t('pause') : st === 'paused' ? t('play') : t('play_pause')}
           onClick={() => { tick(); onKey('play_pause'); }}>
           {st === 'playing' ? <Ic.Pause /> : st === 'paused' ? <Ic.Play /> : <Ic.PlayPause />}
         </button>
-        <button className="key card" aria-label={t('type_on_tv')} aria-haspopup="dialog" onClick={onType}><Ic.Keyboard /></button>
+        <button className="key off-dim" aria-label={t('type_on_tv')} aria-haspopup="dialog" onClick={onType}><Ic.Keyboard /></button>
+        <button className={`key power ${tv?.power === 'on' ? 'is-on' : ''}`} aria-label={tv?.power === 'on' ? t('turn_off') : t('turn_on')}
+          onClick={() => { tick(); onPower(); }}><Ic.Power /></button>
       </div>
       <div className="vol-row">
-        <div className="volume card" role="group" aria-label={t('volume')}>
+        <div className="volume glass off-dim" role="group" aria-label={t('volume')}>
           <button aria-label={t('vol_down')} {...downR}><Ic.Minus /></button>
           <span className="vol-mid" aria-live="polite">
-            {v?.muted ? <Ic.Muted size={16} /> : <Ic.Speaker size={16} />}
-            <span>{v?.muted ? t('muted') : v?.known ? v.level : t('vol_short')}</span>
+            {v?.muted ? t('muted') : v?.known ? v.level : t('vol_short')}
           </span>
           <button aria-label={t('vol_up')} {...upR}><Ic.Plus /></button>
         </div>
-        <button className={`key card mute ${v?.muted ? 'on' : ''}`} aria-pressed={Boolean(v?.muted)} aria-label={v?.muted ? t('unmute') : t('mute')}
+        <button className={`ball glass mute off-dim ${v?.muted ? 'on' : ''}`} aria-pressed={Boolean(v?.muted)} aria-label={v?.muted ? t('unmute') : t('mute')}
           onClick={() => { tick(); onVolume('mute'); }}><Ic.Muted /></button>
+        {onAsk && (
+          <button className="ball glass ask-ball" aria-label={t('ask_for_show')} aria-haspopup="dialog" onClick={onAsk}>
+            <Ic.Sparkles size={20} />
+          </button>
+        )}
       </div>
     </div>
-  );
-}
-
-// The Ask bar at the bottom: looks like a field, opens the Ask screen with the keyboard up.
-export function AskButton({ onAsk, quiet }) {
-  return (
-    <button className={`ask ${quiet ? 'quiet' : ''}`} onClick={onAsk} aria-label={t('ask_for_show')} aria-haspopup="dialog">
-      <Ic.Sparkles size={20} className="ask-spark" />
-      <span className="ask-hint">{t('ask_hint')}</span>
-      <span className="ask-tag" aria-hidden="true">{t('ask_tag')}</span>
-    </button>
   );
 }

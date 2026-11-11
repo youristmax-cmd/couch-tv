@@ -6,12 +6,12 @@ import { api } from './api.js';
 import { logoFor } from './appLogos.js';
 import { t, LANGS, choice, setChoice, locale } from './i18n.js';
 
-export const Sheet = forwardRef(function Sheet({ open, onClose, title, children, className = '', fromTop = false, closeDrag, extra = null, head = null }, ref) {
+export const Sheet = forwardRef(function Sheet({ open, onClose, title, children, className = '', fromTop = false, closeDrag, extra = null, head = null, style }, ref) {
   return (
     <div className={`sheet-layer ${open ? 'open' : ''} ${fromTop ? 'from-top' : ''}`} aria-hidden={!open} inert={!open}
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}>
       <div className="scrim" onClick={onClose} />
-      <div ref={ref} className={`sheet ${className}`} role="dialog" aria-modal="true" aria-label={title}>
+      <div ref={ref} className={`sheet ${className}`} style={style} role="dialog" aria-modal="true" aria-label={title}>
         {!fromTop && !head && <div className="grabber" />}
         {head || (
           <header className="sheet-head">
@@ -60,7 +60,9 @@ const shortEp = (s) => [s.season && `S${s.season}`, s.episode && `E${s.episode}`
 
 const friendly = (msg) => (msg === 'Can’t reach the bridge' ? t('cant_reach_wifi') : msg);
 
-export const AskSheet = forwardRef(function AskSheet({ open, onClose, recs, onAsk, playing, serviceName, onPlay, sleepLeft, onSleepChip, whoLabel, onWhoChip }, inputRef) {
+// The Ask screen wears the same landscape as the remote (`scene`), with shortcuts for the sleep
+// timer, who is watching and the TV's inputs.
+export const AskSheet = forwardRef(function AskSheet({ open, onClose, recs, onAsk, playing, serviceName, onPlay, sleepLeft, onSleepChip, whoLabel, onWhoChip, onInputChip, scene }, inputRef) {
   const [text, setText] = useState('');
   const [thread, setThread] = useState(loadThread);
   const [secs, setSecs] = useState(0);
@@ -185,7 +187,7 @@ export const AskSheet = forwardRef(function AskSheet({ open, onClose, recs, onAs
         <span className="show-art">{poster && <img src={poster} alt="" />}</span>
         <span className="show-text"><b>{show.title}</b>{sub && <small>{sub}</small>}</span>
         {!show.on && onPlay && (
-          <button type="button" className="round accent show-play" aria-label={t('play_now', { title: show.title })}
+          <button type="button" className="round solid show-play" aria-label={t('play_now', { title: show.title })}
             onClick={() => { tick(); onPlay(show); }}><Ic.Play size={18} /></button>
         )}
       </span>
@@ -194,14 +196,18 @@ export const AskSheet = forwardRef(function AskSheet({ open, onClose, recs, onAs
 
   const head = (
     <header className="ask-head">
-      <button type="button" className="round card" aria-label={t('back_to_remote')} onClick={onClose}><Ic.Left size={20} /></button>
-      <div className="ask-head-text"><h2>{t('ask_title')}</h2><span>{t('ask_sub')}</span></div>
-      {thread.length > 0 && <button type="button" className="pill card new-chat" onClick={newChat}>{t('new_chat')}</button>}
+      <button type="button" className="round glass" aria-label={t('back_to_remote')} onClick={onClose}><Ic.Left size={20} /></button>
+      <h2 className="ask-title">{t('ask_title')}</h2>
+      {thread.length > 0
+        ? <button type="button" className="round glass new-chat" aria-label={t('new_chat')} onClick={newChat}><Ic.Plus size={20} /></button>
+        : <span className="ask-head-space" aria-hidden="true" />}
     </header>
   );
 
+  // One quiet row at the top (back, the title, new chat), then the conversation over the landscape.
   return (
-    <Sheet open={open} onClose={onClose} title={t('ask_for_show')} className="ask-sheet" head={head}>
+    <Sheet open={open} onClose={onClose} title={t('ask_for_show')} className={`ask-sheet ${scene ? 'is-scene' : ''}`} head={head}
+      style={scene ? { '--scene': `url("${scene}")` } : undefined}>
       {thread.length > 0 ? (
         <div className="thread" ref={list} role="log" aria-live="polite" aria-label={t('conversation')}>
           {thread.map((m) => (m.me ? (
@@ -232,21 +238,26 @@ export const AskSheet = forwardRef(function AskSheet({ open, onClose, recs, onAs
           {ideas.map((i) => <button key={i} type="button" className="chip glass" onClick={() => { tick(); submit(i); }}>{i}</button>)}
         </div>
       )}
-      {(onSleepChip || whoLabel) && (
+      {(onSleepChip || whoLabel || onInputChip) && (
         <div className="quick" role="group" aria-label={t('shortcuts')}>
           {onSleepChip && (
-            <button type="button" className="quick-chip" onClick={() => { tick(); onSleepChip(); }}>
+            <button type="button" className="quick-chip glass" onClick={() => { tick(); onSleepChip(); }}>
               <Ic.Moon size={14} /> {t('sleep_timer')}{sleepLeft ? ` · ${sleepLeft}` : ''}
             </button>
           )}
           {whoLabel && (
-            <button type="button" className="quick-chip" aria-haspopup="dialog" onClick={() => { tick(); onWhoChip(); }}>
+            <button type="button" className="quick-chip glass" aria-haspopup="dialog" onClick={() => { tick(); onWhoChip(); }}>
               <Ic.People size={14} /> {t('whos_watching_is', { name: whoLabel })}
+            </button>
+          )}
+          {onInputChip && (
+            <button type="button" className="quick-chip glass" onClick={() => { tick(); onInputChip(); }}>
+              <Ic.Input size={14} /> {t('input')}
             </button>
           )}
         </div>
       )}
-      <form className="ask-field" onSubmit={(e) => { e.preventDefault(); submit(); }}>
+      <form className="ask-field glass" onSubmit={(e) => { e.preventDefault(); submit(); }}>
         <input ref={inputRef} value={text} onChange={onType} onKeyDown={onKey} enterKeyHint="send"
           placeholder={thread.length ? t('reply') : t('put_on')} aria-label={thread.length ? t('reply_aria') : t('ask_aria')} autoComplete="off" autoCorrect="on" />
         {canListen && <button type="button" className={`round card-2 ask-mic ${listening ? 'listening' : ''}`} aria-label={listening ? t('stop_listening') : t('speak')}

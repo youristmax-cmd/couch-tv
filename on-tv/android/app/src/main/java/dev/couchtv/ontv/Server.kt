@@ -42,6 +42,9 @@ class Server(private val ctx: Context, port: Int) : NanoWSD(port) {
             uri == "/tv/config.js" -> newFixedLengthResponse(Response.Status.OK, "application/javascript",
                 "window.COUCH_CONFIG = " + Store.publicConfig() + ";\n").noCache()
             uri.startsWith("/tv/") -> devTv(uri.removePrefix("/tv/")) ?: staticOrIndex("www/tv", uri.removePrefix("/tv/"), inject = false)
+            // The phone remote's app tiles: the same square icon as the TV home's dock. No token (an
+            // <img> cannot send one), and only for apps the home lists anyway.
+            uri.startsWith("/icon/") -> appIcon(uri.removePrefix("/icon/").removeSuffix(".png"))
             else -> staticOrIndex("www/remote", uri.removePrefix("/"), inject = true)
         }
     } catch (e: ApiError) {
@@ -483,6 +486,14 @@ class Server(private val ctx: Context, port: Int) : NanoWSD(port) {
 
     private fun ok(from: JSONObject? = null): JSONObject = (from ?: JSONObject()).put("ok", true)
     private fun err(msg: String) = JSONObject().put("ok", false).put("error", msg)
+
+    private fun appIcon(pkg: String): Response {
+        if (!Regex("[A-Za-z0-9_.]{1,200}").matches(pkg) || Tv.tvLaunchables().none { it.activityInfo.packageName == pkg })
+            return json(404, err("no such app"))
+        val png = AppArt.icon(ctx, pkg) ?: return json(404, err("no icon"))
+        return newFixedLengthResponse(Response.Status.OK, "image/png", java.io.ByteArrayInputStream(png), png.size.toLong())
+            .apply { addHeader("Cache-Control", "max-age=86400") }
+    }
 
     private fun json(status: Int, o: JSONObject): Response =
         newFixedLengthResponse(Status(status), "application/json", o.toString()).noStore()

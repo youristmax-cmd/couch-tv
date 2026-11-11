@@ -1,25 +1,26 @@
-/* TV remote. The navy remote (Nov 2026): a dark navy ground, flat navy cards with a thin rim,
-   one amber accent (OK, resume, send, the Ask bar), Antonio for the clock and OK, Inter for the rest. */
+/* TV remote. The glass remote (Nov 2026 redesign): the TV home's own landscape behind everything
+   (scene.js), frosted glass panels over it, white as the one bright fill (resume, send, play),
+   Antonio for the clock and OK, Inter for the rest. */
 :root {
   color-scheme: dark;
-  --bg: #0A0E17;
-  --card: #151B2B;
-  --card-2: #1C2336;
-  --field: #1C1F2B;
-  --line: #1F2738;
-  --line-2: #2A3348;
-  --ink: #EEF1F7;
-  --ink-2: #8E97AB;
-  --ink-3: #8E97AB;
-  --icon: #C7CEDB;
-  --accent: #F2B96B;
-  --accent-press: #DDA457;
-  --on-accent: #1A1206;
-  --ok: #5DD6A0;
+  --bg: #06080f;
+  --card: rgba(255, 255, 255, 0.10);
+  --card-2: rgba(255, 255, 255, 0.16);
+  --field: rgba(255, 255, 255, 0.10);
+  --line: rgba(255, 255, 255, 0.16);
+  --line-2: rgba(255, 255, 255, 0.24);
+  --ink: #fff;
+  --ink-2: rgba(255, 255, 255, 0.72);
+  --ink-3: rgba(255, 255, 255, 0.72);
+  --icon: rgba(255, 255, 255, 0.9);
+  --accent: rgba(255, 255, 255, 0.92);
+  --accent-press: #d6d9e2;
+  --on-accent: #0b1020;
+  --ok: #6EE7A8;
   --glass: var(--card);
-  --glass-press: #222A3F;
+  --glass-press: rgba(255, 255, 255, 0.24);
   --rim: var(--line);
-  --sheet: #10141F;
+  --sheet: rgba(10, 13, 22, 0.82);
   --solid: var(--accent);
   --on-solid: var(--on-accent);
   --err: #ff6961;
@@ -53,13 +54,31 @@ input::placeholder { color: var(--ink-2); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 button:disabled { opacity: 0.4; }
 
-/* The materials: flat cards with a thin rim, and the amber accent. ("glass" is the old name, kept
-   so the sheets and Watch pick up the cards without each being renamed.) */
-.glass, .card { background: var(--card); border: 1px solid var(--line); }
-.card-2 { background: var(--card-2); border: 1px solid var(--line-2); }
+/* The materials. Glass: a frosted panel over the landscape, a bright rim on its top-left edge and
+   a soft shine in that corner (backgrounds, not ::after, which .round keeps for its bigger hit
+   area). Inside a sheet the sheet is the material, so cards there are plain light fills. White is
+   the one solid fill. */
+:root {
+  --glass-bg:
+    radial-gradient(120% 90% at 12% 0%, rgba(255, 255, 255, 0.20) 0%, rgba(255, 255, 255, 0.05) 32%, rgba(255, 255, 255, 0) 58%),
+    radial-gradient(90% 70% at 90% 110%, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0) 60%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.20) 0%, rgba(255, 255, 255, 0.06) 45%, rgba(255, 255, 255, 0.10) 100%);
+  --glass-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22), inset 1.5px 1.5px 0 -0.5px rgba(255, 255, 255, 0.62),
+    inset -1px -1px 0 -0.5px rgba(255, 255, 255, 0.18), inset 0 -10px 18px -10px rgba(0, 0, 0, 0.28),
+    inset 0 10px 18px -12px rgba(255, 255, 255, 0.35), 0 18px 48px rgba(0, 0, 0, 0.38);
+  --glass-blur: blur(30px) saturate(1.9) brightness(1.08);
+}
+.glass, .card {
+  background: var(--glass-bg); border: 0; box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+}
+.card-2 { background: var(--card-2); border: 0; box-shadow: inset 0 0 0 1px var(--line-2); }
 button.glass:active, button.card:active, button.card-2:active { background: var(--glass-press); transition: none; }
-.solid, .accent { background: var(--accent); color: var(--on-accent); border: 0; }
+.solid, .accent { background: var(--accent); color: var(--on-accent); border: 0; box-shadow: none; }
 button.solid:active, button.accent:active { background: var(--accent-press); }
+.sheet:not(.ask-sheet) .glass, .sheet:not(.ask-sheet) .card {
+  background: var(--card); box-shadow: inset 0 0 0 1px var(--line); -webkit-backdrop-filter: none; backdrop-filter: none;
+}
 
 /* Backdrop: the navy ground, with only a faint wash of what is on the TV. */
 .backdrop { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; background: var(--bg); }
@@ -313,8 +332,6 @@ main.single { display: flex; flex-direction: column; padding-left: var(--sa-l); 
 .sheet-head { display: flex; align-items: center; margin-bottom: 14px; }
 .sheet-head h2 { flex: 1; font: 700 22px/1.2 var(--font-d); letter-spacing: -0.01em; }
 .ask-field { display: flex; align-items: center; gap: 8px; height: 56px; border-radius: 18px; padding: 0 8px 0 18px; }
-/* Inside a sheet the sheet is the material: controls are plain fills, never glass on glass. */
-.sheet .glass { background: var(--card); border-color: var(--line); }
 .sheet button.glass:active { background: var(--glass-press); }
 .ask-field.is-hidden { position: absolute; top: 0; left: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; overflow: hidden; padding: 0; border: 0; }
 .ask-field input { flex: 1; min-width: 0; background: none; border: 0; outline: 0; font-size: 17px; }
@@ -587,3 +604,206 @@ main.single { display: flex; flex-direction: column; padding-left: var(--sa-l); 
 .talk-mic { background: var(--card-2); }
 /* Keyboard up: the title stays, the conversation keeps the room. */
 .kb-open .ask-head-text span { display: none; }
+
+/* ======================================================================================
+   The glass remote (Nov 2026 redesign). The TV home's landscape behind it all, sharp; frosted
+   glass panels; the clock and date centred as on the TV; five app tiles in one pill; the round
+   glass pad; one pill of keys (back, home, play, keyboard, power); volume, mute and a round Ask.
+   ====================================================================================== */
+
+/* The landscape: placed like the design (the ridge and the city), a light shade at the top and a
+   deeper one at the bottom so the controls read. TV off: the same sky, dimmed. */
+.backdrop.is-scene .bd-layer { inset: 0; filter: none; background-position: 30% 50%; }
+.backdrop.is-scene .bd-layer.top { opacity: 1; }
+.backdrop.is-scene .bd-shade {
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.18) 0%, rgba(0, 0, 0, 0) 30%, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.42) 100%);
+}
+.app.is-off .backdrop.is-scene .bd-shade { background: rgba(0, 0, 0, 0.5); }
+
+/* The column */
+.remote-col { gap: 14px; padding: calc(var(--sa-t) + 6px) 18px max(18px, var(--sa-b)); }
+.single .remote-col { padding-bottom: max(18px, var(--sa-b)); }
+.pull-zone { gap: 14px; }
+
+/* Top line: dot and name, then the moon (TV menu, sleep) and the Wi-Fi mark */
+.topbar { min-height: 22px; gap: 2px; padding: 0 4px; }
+.tvname { gap: 8px; }
+.status-dot { width: 8px; height: 8px; }
+.status-dot.on { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+.tvname-text { display: block; flex: none; max-width: 60%; font-size: 13px; font-weight: 400; color: rgba(255, 255, 255, 0.82);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.3); }
+.tv-status { min-width: 0; font-size: 12px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.top-btn { position: relative; flex: none; height: 44px; min-width: 36px; margin: -11px 0; padding: 0 6px; border-radius: 22px;
+  display: flex; align-items: center; justify-content: center; gap: 4px; color: rgba(255, 255, 255, 0.75); font-size: 12px; font-variant-numeric: tabular-nums; }
+.top-btn.is-set { color: #fff; }
+.top-btn:active { background: var(--card); }
+.top-mark { flex: none; width: 30px; height: 22px; display: grid; place-items: center; color: rgba(255, 255, 255, 0.75); }
+.top-mark.err { color: var(--err); }
+.who-btn .who-dot { width: 26px; height: 26px; font-size: 12px; }
+
+/* The date and weather line, the big clock under it */
+.clock-row { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 2px; padding: 8px 0 0; }
+.clock-date { max-width: 100%; display: flex; align-items: center; gap: 6px; font-size: 14px; color: rgba(255, 255, 255, 0.8);
+  white-space: nowrap; overflow: hidden; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.3); }
+.clock-date > span { overflow: hidden; text-overflow: ellipsis; }
+.clock-sep { flex: none; opacity: 0.6; }
+.clock { display: flex; align-items: baseline; gap: 6px; font: 300 124px/0.9 var(--font-num); letter-spacing: -2px; color: rgba(255, 255, 255, 0.92); }
+.clock small { margin: 0; padding-bottom: 6px; font: 300 28px/1 var(--font-num); letter-spacing: 0; color: rgba(255, 255, 255, 0.92); text-transform: lowercase; }
+.clock-row.compact { padding: 2px 0 0; gap: 0; }
+.clock-row.compact .clock-date { font-size: 13px; color: rgba(255, 255, 255, 0.88); }
+.clock-row.compact .clock { gap: 5px; font-size: 72px; line-height: 0.95; letter-spacing: -1.5px; color: rgba(255, 255, 255, 0.95); }
+.clock-row.compact .clock small { padding-bottom: 4px; font-size: 20px; }
+
+/* Keep watching / Now playing */
+.now.card { margin-top: 4px; padding: 10px 12px; border-radius: 22px; gap: 10px; }
+.now-head { gap: 12px; }
+.now-art { width: 50px; height: 68px; border-radius: 10px; background: rgba(255, 255, 255, 0.14); }
+.now-text { gap: 3px; }
+.now-label { font-weight: 400; color: rgba(255, 255, 255, 0.65); }
+.now-title { font-size: 15px; }
+.now-sub { color: rgba(255, 255, 255, 0.7); }
+.resume { width: 46px; height: 46px; }
+.scrub-track { background: rgba(255, 255, 255, 0.2); }
+.scrub-fill { background: #fff; }
+.now-chev-btn { color: #fff; }
+
+/* Five app tiles in one pill */
+.app-row { display: flex; gap: 8px; padding: 8px; border-radius: 999px; }
+.app-key { flex: 1; min-width: 0; height: 56px; padding: 0; border-radius: 16px; overflow: hidden; display: grid; place-items: center;
+  background: var(--tile, #111318); color: #fff; transition: transform 0.15s var(--ease); }
+.app-key img { width: 100%; height: 100%; border-radius: 0; object-fit: cover; }
+.app-key:active { transform: scale(0.96); transition: none; }
+.app-word { max-width: 100%; padding: 0 4px; border: 0; font: 600 12px/1.05 var(--font); color: #fff;
+  overflow-wrap: normal; word-break: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.app-key.all-apps { background: rgba(255, 255, 255, 0.12); }
+.app-key { -webkit-touch-callout: none; }
+/* Choosing the app for a spot: the app's own tile beside its name */
+.slot-pic { flex: none; width: 48px; height: 40px; border-radius: 10px; overflow: hidden; display: grid; place-items: center; background: var(--tile, #111318); }
+.slot-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.slot-pic .app-word { font-size: 9px; }
+.slot-sheet [role="radiogroup"] { display: flex; flex-direction: column; gap: 2px; }
+.slot-reset { width: 100%; margin-top: 12px; }
+
+/* The round glass pad, a raised glass OK */
+.pad { width: min(232px, 100cqmin); }
+.pad-dir { color: rgba(255, 255, 255, 0.9); }
+.pad-dir.up { padding-top: 14px; }
+.pad-dir.down { padding-bottom: 14px; }
+.pad-dir.left { padding-left: 14px; }
+.pad-dir.right { padding-right: 14px; }
+.pad-ok {
+  width: 37%; color: #fff; font: 400 22px/1 var(--font-num); letter-spacing: 1px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.10));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35), inset 1.5px 1.5px 0 -0.5px rgba(255, 255, 255, 0.8),
+    inset 0 -8px 14px -8px rgba(0, 0, 0, 0.35), 0 6px 18px rgba(0, 0, 0, 0.25);
+}
+.pad-ok.lit { background: linear-gradient(145deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.2)); }
+.pad-msg { border-radius: 28px; }
+.pad-msg p { color: rgba(255, 255, 255, 0.8); }
+
+/* The keys, volume, mute and Ask */
+.controls { gap: 14px; }
+.key-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; padding: 8px; border-radius: 999px; }
+.key {
+  height: 50px; border-radius: 14px; color: rgba(255, 255, 255, 0.92);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.02));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28), inset 1px 1px 0 -0.5px rgba(255, 255, 255, 0.55), inset 0 -6px 10px -8px rgba(0, 0, 0, 0.3);
+  transition: transform 0.15s var(--ease);
+}
+.key svg { width: 20px; height: 20px; }
+.key:active { transform: scale(0.96); background: rgba(255, 255, 255, 0.2); transition: none; }
+.vol-row { gap: 8px; }
+.volume { height: 54px; padding: 0 6px; border-radius: 999px; }
+.volume button { width: 44px; height: 42px; border-radius: 999px; color: #fff; }
+.volume button:active { background: rgba(255, 255, 255, 0.18); }
+.vol-mid { font-size: 11px; font-weight: 400; letter-spacing: 1.4px; color: rgba(255, 255, 255, 0.7); }
+.ball { position: relative; flex: none; width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; color: #fff; transition: transform 0.15s var(--ease); }
+.ball:active { transform: scale(0.96); transition: none; }
+.ball svg { width: 20px; height: 20px; }
+.mute { width: 54px; }
+.app.is-off .controls { opacity: 1; pointer-events: auto; }
+.app.is-off .off-dim { opacity: 0.4; pointer-events: none; }
+
+/* The sheets: dark frosted glass over the landscape */
+.sheet { -webkit-backdrop-filter: blur(28px) saturate(1.4); backdrop-filter: blur(28px) saturate(1.4); border-top: 1px solid rgba(255, 255, 255, 0.14); }
+.sheet-layer.from-top .sheet { border-bottom: 1px solid rgba(255, 255, 255, 0.14); }
+.scrim { background: rgba(0, 0, 0, 0.45); }
+
+/* Watch, over the landscape: a dark veil so the rows read */
+.watch-page, .split .watch-col { background: rgba(6, 8, 15, 0.6); }
+
+/* The Ask screen: its own landscape, the small clock, his words in white, Claude's in glass */
+.sheet.ask-sheet { gap: 14px; padding: calc(var(--sa-t) + 6px) 18px max(14px, var(--sa-b)); background: var(--bg);
+  -webkit-backdrop-filter: none; backdrop-filter: none; border: 0; }
+.sheet.ask-sheet.is-scene {
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.10) 0%, rgba(0, 0, 0, 0) 25%, rgba(0, 0, 0, 0.05) 60%, rgba(0, 0, 0, 0.38) 100%),
+    var(--scene) 30% 50% / cover no-repeat, var(--bg);
+}
+/* the top: back, the title in the middle, new chat (or an empty slot of the same size) */
+.ask-head { gap: 12px; }
+.ask-head .round, .ask-head-space { flex: none; width: 44px; height: 44px; }
+.ask-title { flex: 1; min-width: 0; text-align: center; font: 600 17px/1.2 var(--font); text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35); }
+.kb-open .ask-sheet .ask-title { font-size: 17px; }
+/* the conversation scrolls, so its bubbles keep short shadows and the box a little room at the sides */
+.ask-sheet .thread { gap: 12px; margin: 0 -6px; padding: 8px 6px 8px; }
+.bubble.me { max-width: 280px; background: rgba(255, 255, 255, 0.92); color: #0b1020; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16); }
+.bubble.claude, .bubble.pending {
+  max-width: 310px; padding: 14px 14px 12px; border: 0; background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22), inset 1.5px 1.5px 0 -0.5px rgba(255, 255, 255, 0.62),
+    inset 0 -10px 18px -10px rgba(0, 0, 0, 0.22), 0 2px 10px rgba(0, 0, 0, 0.16);
+}
+.bubble.err { color: #ffd2cd; }
+.show-card { background: rgba(0, 0, 0, 0.28); }
+.show-art { background: rgba(255, 255, 255, 0.18); }
+.bubble .show-text small { color: rgba(255, 255, 255, 0.75); }
+/* chips sit in scrolling boxes: a short shadow, so the box's edge never cuts it into a band */
+.ask-sheet .chip.glass, .ask-sheet .replies .reply-chip.glass, .sheet.ask-sheet .replies .reply-chip:first-child, .quick-chip.glass {
+  min-height: 40px; padding: 0 16px; border: 0; border-radius: 999px; color: #fff; font-size: 14px; font-weight: 400;
+  background: var(--glass-bg); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22), inset 1.5px 1.5px 0 -0.5px rgba(255, 255, 255, 0.62),
+    inset 0 -8px 14px -10px rgba(0, 0, 0, 0.25), 0 2px 8px rgba(0, 0, 0, 0.16);
+}
+.ask-sheet .replies .reply-chip.glass { padding: 9px 16px; }
+.quick-chip.glass { height: 32px; min-height: 32px; padding: 0 12px; font-size: 12px; }
+.quick-chip.glass:active { background: var(--glass-press); }
+.ask-sheet .ask-field.glass { height: 56px; padding: 0 8px 0 18px; border: 0; border-radius: 999px; background: var(--glass-bg); }
+.ask-sheet .ask-field input::placeholder { color: rgba(255, 255, 255, 0.7); }
+.ask-sheet .ask-mic { color: #fff; }
+.ask-sheet .autosend { background: var(--glass-bg); box-shadow: var(--glass-shadow); }
+.autosend-bar { background: rgba(255, 255, 255, 0.22); }
+::selection { background: rgba(255, 255, 255, 0.3); }
+
+/* Shorter and narrower screens: the clock gives way first, then the gaps, then the pad. */
+@media (max-height: 820px) {
+  .clock { font-size: 104px; }
+  .remote-col, .pull-zone, .controls { gap: 12px; }
+}
+@media (max-height: 760px) {
+  .clock { font-size: 84px; }
+  .clock small { font-size: 22px; padding-bottom: 4px; }
+  .now-art { width: 44px; height: 60px; }
+  .app-key { height: 50px; }
+  .key { height: 46px; }
+  .volume { height: 50px; }
+  .ball { width: 50px; height: 50px; }
+  .clock-row.compact .clock { font-size: 56px; }
+}
+@media (max-height: 690px) {
+  .clock { font-size: 64px; }
+  .clock-row.compact { display: none; }
+}
+@media (max-height: 660px) {
+  .clock-row { display: none; }
+}
+@media (max-width: 360px) {
+  .clock { font-size: 96px; }
+  .app-row, .key-row { gap: 6px; padding: 6px; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass, .card, .bubble.claude, .bubble.pending { background: rgba(22, 26, 38, 0.94); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .backdrop.is-scene .bd-layer.top { opacity: 1; }
+}
+@media (prefers-contrast: more) {
+  :root { --ink-2: rgba(255, 255, 255, 0.9); --line: rgba(255, 255, 255, 0.4); --line-2: rgba(255, 255, 255, 0.5); }
+}

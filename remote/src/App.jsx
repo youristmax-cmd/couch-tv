@@ -3,10 +3,11 @@ import { flushSync } from 'react-dom';
 import { api, subscribeNow, setTvId } from './api.js';
 import { tick } from './haptics.js';
 import * as Ic from './icons.jsx';
-import { TopBar, ClockWeather, NowCard, AppRow, Pad, Controls, AskButton, WhoSheet, whoName } from './Remote.jsx';
+import { TopBar, ClockWeather, NowCard, AppRow, Pad, Controls, WhoSheet, SlotSheet, rowApps } from './Remote.jsx';
 import { Watch, launchable } from './Watch.jsx';
 import { AskSheet, MoreSheet, ArrangeSheet, PeopleSheet, Onboarding } from './Sheets.jsx';
-import { usePullDown, usePageDrag } from './gestures.js';
+import { usePullDown } from './gestures.js';
+import { useScene } from './scene.js';
 import { t, useLang, setTvLang } from './i18n.js';
 
 const store = {
@@ -58,8 +59,10 @@ function useSize() {
   return s;
 }
 
-// The ground is the artwork of what is on the TV, blurred. Two layers crossfade when it changes.
-function Backdrop({ image, colour, off }) {
+// The ground is the TV home's landscape for this moment (scene.js), sharp, the same sky as the TV.
+// Without one (a bridge with no TV home), the artwork of what is on the TV, blurred. Two layers
+// crossfade when it changes.
+function Backdrop({ image, colour, off, scene }) {
   const [layers, setLayers] = useState([{ key: 0, image, colour }]);
   useEffect(() => {
     let cancelled = false;
@@ -69,7 +72,7 @@ function Backdrop({ image, colour, off }) {
     return () => { cancelled = true; };
   }, [image, colour]);
   return (
-    <div className={`backdrop ${off ? 'off' : ''}`} aria-hidden="true">
+    <div className={`backdrop ${off ? 'off' : ''} ${scene ? 'is-scene' : ''}`} aria-hidden="true">
       {layers.map((l, i) => (
         <div key={l.key} className={`bd-layer ${i === layers.length - 1 ? 'top' : ''}`}
           style={l.image ? { backgroundImage: `url("${l.image}")` } : { background: `radial-gradient(120% 70% at 50% 18%, color-mix(in srgb, ${l.colour || '#2a2a30'} 55%, #000), #050506 75%)` }} />
@@ -283,6 +286,7 @@ export default function App() {
   const dark = off || Boolean(offState);
   const artwork = dark ? null : (fresh || (appColour ? null : lastArt.current));
   const tint = dark ? '#101012' : (appColour || null);
+  const scene = useScene(weather?.code);
 
   // Swipe down from the top (top bar, now playing, the Watch title) pulls the TV menu down with the finger.
   const moreSheet = useRef(null);
@@ -307,10 +311,7 @@ export default function App() {
     const t = p > 0.5 ? 'watch' : 'remote';
     if (t !== tab) setTab(t);
   };
-  // The dock (the Ask bar) takes a sideways swipe like the pages above it, so paging works from the
-  // top of the screen to the bottom. There are no tabs: All apps opens Watch, and Watch has a back
-  // button (and the swipe) to come back.
-  const dockDrag = usePageDrag(pager, (t) => goTo(t), 'content');
+  // There are no tabs: a swipe (or All apps) opens Watch, and Watch has a back button to come back.
   // All apps: the full list is the Apps section of Watch. One column: page over to it; two
   // columns: Watch is already beside the remote, so scroll it there.
   const onAllApps = () => {
@@ -320,28 +321,38 @@ export default function App() {
     if (box) box.scrollTo({ top: box.scrollTop + sec.getBoundingClientRect().top - box.getBoundingClientRect().top - 8, behavior: still ? 'auto' : 'smooth' });
     if (!wide) goTo('watch');
   };
+  // This phone's own app row (held tiles): a list of app ids, saved on the phone. null: the TV's order.
+  const [row, setRow] = useState(() => { try { return JSON.parse(store.get('tv.row') || 'null'); } catch { return null; } });
+  const [slot, setSlot] = useState(0);
+  const saveRow = (r) => { setRow(r); store.set('tv.row', r ? JSON.stringify(r) : ''); };
+  const pickSlot = (id) => {
+    const ids = rowApps(launchable(apps), row).map((a) => a.id);
+    const at = ids.indexOf(id);
+    if (at >= 0) ids[at] = ids[slot];   // already in the row: the two swap
+    ids[slot] = id;
+    saveRow(ids); setSheet(null);
+  };
   const appInfo = appById[tv?.app?.id];
   const nextUp = (cont === undefined ? recs?.continue : cont)?.[0] || null;
 
   const remote = (
     <div className="remote-col">
       <div className="pull-zone" {...pull}>
-        <TopBar people={people} tvName={thisTv?.name} who={who} onWho={() => setSheet('who')} tv={tv} appInfo={appInfo} reach={reach} sleepLeft={sleepLeft} onPower={onPower} onMore={() => setSheet('more')} />
+        <TopBar people={people} tvName={thisTv?.name} who={who} onWho={() => setSheet('who')} tv={tv} appInfo={appInfo} reach={reach} sleepLeft={sleepLeft} onMore={() => setSheet('more')} />
         <ClockWeather settings={tvSettings} weather={weather} />
         <NowCard tv={tv} appInfo={appInfo} item={nextUp} serviceName={serviceName} onKey={onKey} onResume={onPlay} />
       </div>
-      <AppRow apps={launchable(apps)} onLaunch={onLaunch} onAll={onAllApps} />
+      <AppRow apps={launchable(apps)} row={row} onLaunch={onLaunch} onAll={onAllApps} onHold={(i) => { setSlot(i); setSheet('slot'); }} />
       <Pad onKey={onKey} offState={offState} wakeError={wakeError} onWake={onWake} onRetry={onRetry}
         tvName={thisTv?.name} onLivingRoom={() => { tick(); chooseTv(null); }} />
-      <Controls tv={tv} onKey={onKey} onVolume={onVolume} onType={openType} />
-      {wide && askOn && <AskButton onAsk={openAsk} quiet={Boolean(offState)} />}
+      <Controls tv={tv} onKey={onKey} onVolume={onVolume} onType={openType} onPower={onPower} onAsk={askOn ? openAsk : null} />
     </div>
   );
   const watch = <Watch pull={pull} people={people} who={who || people[0]?.id || 'both'} recs={recs} cont={cont === undefined ? (recs === false ? false : recs?.continue) : cont} apps={apps} screens={screens} serviceName={serviceName} onPlay={onPlay} onLaunch={onLaunch} onScreen={onScreen} wide={wide} onBack={() => goTo('remote')} />;
 
   return (
     <div className={`app ${wide ? 'is-wide' : ''} ${offState ? 'is-off' : ''}`}>
-      <Backdrop image={artwork} colour={tint} off={dark} />
+      <Backdrop image={scene || artwork} colour={tint} off={!scene && dark} scene={Boolean(scene)} />
       {reach === false && !wide && tab === 'watch' && (
         <div className="banner glass" role="status"><Ic.Wifi size={18} /><span><b>{t('cant_reach')}</b> {t('home_wifi')}</span>
           <button onClick={() => { tick(); onRetry(); }}>{t('try_again')}</button></div>
@@ -354,16 +365,13 @@ export default function App() {
             <section className="page" aria-label="Remote" inert={tab !== 'remote'}>{remote}</section>
             <section className="page watch-page" aria-label="Watch" inert={tab !== 'watch'}>{watch}</section>
           </div>
-          <div className="dock" {...dockDrag}>
-            {askOn && <AskButton onAsk={openAsk} quiet={Boolean(offState)} />}
-          </div>
         </main>
       )}
       {toast && <div key={toast.id} className={`toast glass ${toast.kind}`} role="status">{toast.text}</div>}
       <AskSheet ref={askInput} open={sheet === 'ask'} onClose={() => setSheet(null)} recs={recs} onAsk={onAsk}
-        playing={tv?.playing} serviceName={serviceName} onPlay={onPlay}
-        sleepLeft={sleepLeft} onSleepChip={() => setSheet('more')}
-        whoLabel={people.length > 0 && who ? whoName(people, who) : null} onWhoChip={() => setSheet('who')} />
+        playing={tv?.playing} serviceName={serviceName} onPlay={onPlay} scene={scene} />
+      <SlotSheet open={sheet === 'slot'} onClose={() => setSheet(null)} apps={launchable(apps)} row={row} slot={slot}
+        onPick={pickSlot} onReset={() => { saveRow(null); setSheet(null); }} />
       <WhoSheet open={sheet === 'who'} onClose={() => setSheet(null)} people={people} who={who} setWho={pickWho} />
       <MoreSheet ref={moreSheet} open={sheet === 'more'} tvs={tvs} tvId={tvId || 'living-room'} onTv={(id) => { tick(); chooseTv(id); }}
         picture={tv?.picture} pictureInfo={pictureInfo} onPicture={onPicture} onClose={() => setSheet(null)} sleepEnds={sleepEnds} sleepError={sleepError} onSleep={onSleep}
