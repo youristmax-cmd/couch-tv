@@ -6,7 +6,9 @@
 // nothing on screen and nothing running, the home looks as it always did. A game comes into the
 // window: its bug pops in at the top left, under the Spotify card while that shows small. Two games:
 // two bugs, the one being played on top. OK on a selected bug opens the game (the pill under the bug
-// says where). OK held 1.2 s and let go: that game's bug stays away until the team's next game.
+// says where; a game on a channel that is not in the channel table opens nothing, and the pill
+// only says where it is on). OK held 1.2 s and let go: the bugs are put away, as the Spotify card
+// is, and Up from the app bar brings them back. A game that comes up later shows by itself.
 //
 // The page never talks to a sports feed: it asks the bridge, GET /api/scores, once when the home
 // opens, again when the home comes back in front, and whenever the TV app says a game has come up
@@ -33,10 +35,10 @@
   var IDLE_MS = 60000;      // games showing, none being played: this often
   var STALE_MS = 120000;    // no answer for this long: the bugs go
   var RETRY = [5000, 15000, 45000];   // no answer and nothing showing: three more tries, then quiet
-  var HOLD_MS = 1200;       // OK held this long, then let go: the game is hidden (the card's own timings, nowplaying.js)
+  var HOLD_MS = 1200;       // OK held this long, then let go: the bugs are put away (the card's own timings, nowplaying.js)
   var TAP_MS = 300;         // OK let go sooner than this is a press; later, the hold shows
   var GONE_MS = 520;        // a bug that left is taken away after this (the card's own wait)
-  var KEEP_MS = 36 * 3600000;   // a hidden game is remembered this long; by then its bug would be long gone
+  var KEEP_MS = 36 * 3600000;   // a game that was put away is remembered this long; by then its bug would be long gone
   var RING = 2 * Math.PI * 66;  // once round the basketball ring, in the design's pixels
 
   // A team's letters, shown when its logo is missing: the lightest colour of the team's own set,
@@ -131,8 +133,8 @@
     }
     function nba(o) {
       return over({ league: "nba", league_name: "NBA", league_logo: null, state: "live", status: "In Progress", start: iso(-90 * 60000),
-        away: team("PHX", 78), home: team("LAC", 84), broadcasts: ["FanDuel Sports SoCal"],
-        channel: { name: "FanDuel Sports SoCal", number: 0, link: "", app: null }, final_label: "",
+        away: team("PHX", 78), home: team("LAC", 84), broadcasts: ["ClipperVision", "KTLA"],
+        channel: null, final_label: "",
         nba: { period: "3RD", clock: "4:12", remaining: 0.35, halftime: false } }, o);
     }
     // 42 minutes from now, on the minute: "in 42 min" until the home's clock next turns over
@@ -339,19 +341,22 @@
     }
   }
 
-  // what OK opens: the channel's link, else the app the game is on, else the TV app (the bridge names it)
-  function target(g) { var c = g.channel; return (c && (c.link || c.app)) || S.tvApp || ""; }
+  // what OK opens: the channel's link, else the app the game is on, else (a channel with only its
+  // number) the TV app, which the bridge names. A game on nothing in the channel table: nothing.
+  function target(g) { var c = g.channel; return c ? c.link || c.app || (c.number > 0 ? S.tvApp : "") || "" : ""; }
+  // where a game is on when OK cannot open it: the channel's name, else the first name the feed gives
+  function where(g) { var c = g.channel, bs = g.broadcasts; return String((c && c.name) || (bs && bs.length ? bs[0] : "") || ""); }
   function channelText(g) {
     var c = g.channel, s = c ? String(c.name || "") : "";
     if (c && c.number > 0) s += (s ? " " : "") + c.number;
     return s;
   }
   function appName(pkg) { return (O && O.appName && O.appName(pkg)) || APPS[pkg] || t("sb_tv_app"); }
-  // the pill under a selected bug: "OK to watch · SportsNet LA 690", or "OK to open DIRECTV" when
-  // the game's channel is not known
+  // the pill under a selected bug: "OK to watch · SportsNet LA 690"; for a game OK cannot open,
+  // only where it is on ("On ClipperVision")
   function pill(b) {
-    var g = b.g, ch = channelText(g), tg = target(g);
-    var text = b.note || (ch ? (tg ? t("sb_watch", { channel: ch }) : ch) : tg ? t("sb_open", { app: appName(tg) }) : "");
+    var g = b.g, ch = channelText(g), tg = target(g), on = tg ? "" : where(g);
+    var text = b.note || (tg ? (ch ? t("sb_watch", { channel: ch }) : t("sb_open", { app: appName(tg) })) : on ? t("sb_on", { name: on }) : "");
     if (b.p.pill.textContent !== text) b.p.pill.textContent = text;
   }
   // a short message on the pill in place of its words (which channel to go to, or what went wrong)
@@ -475,6 +480,12 @@
   function isHidden(id) { return S.hidden.some(function (x) { return x.id === id; }); }
   function apply(d) {
     S.good = now(); S.fails = 0;
+    S.last = d;
+    show(d);
+    plan();
+  }
+  // the answer's games on the screen, less the ones that were put away
+  function show(d) {
     S.tvApp = d && typeof d.tv_app === "string" ? d.tv_app : "";
     var all = (d && Array.isArray(d.games) ? d.games : []).filter(function (g) { return g && g.id && g.away && g.home; });
     S.any = all.length > 0;
@@ -482,7 +493,6 @@
     // a game being played goes on top (the bridge sends them that way already); never more than two
     list = list.filter(isLive).concat(list.filter(function (g) { return !isLive(g); })).slice(0, 2);
     sync(list);
-    plan();
   }
   // The only timer, and only while the bridge's answer has games: 15 s with one being played on
   // screen, else 60 s. No games: nothing is set, and the next question waits for wake() or resume.
@@ -498,7 +508,7 @@
     if (S.any) {
       // games on screen: they stay as they are for up to two minutes without an answer, then go
       if (now() - S.good < STALE_MS) { plan(); return; }
-      S.any = false; S.fails = 1;
+      S.any = false; S.fails = 1; S.last = null;
       sync([]);
     }
     if (S.fails <= RETRY.length) S.timer = setTimeout(ask, RETRY[S.fails - 1]);
@@ -532,13 +542,29 @@
     if (tune) note(b, tune, true);                 // it stays until the home is back in front
     asked.then(null, function (e) { note(b, e && e.message); });
   }
-  // OK held and let go: this game stays away. Its id is kept, so the team's next game shows again.
-  function hideGame(b) {
-    var at = Date.now();
-    S.hidden = S.hidden.filter(function (x) { return x.id !== b.id && at - x.at < KEEP_MS; });
-    S.hidden.push({ id: b.id, at: at });
+  // OK held and let go: the bugs are put away, all that are showing, as the Spotify card is. Their
+  // ids are kept, so they stay away over a reload, until Up from the app bar brings them back
+  // (recall). A game that comes into its window later has another id and shows by itself.
+  function closeAll() {
+    var at = Date.now(), a = alive(), ids = a.map(function (x) { return x.id; });
+    S.hidden = S.hidden.filter(function (x) { return ids.indexOf(x.id) < 0 && at - x.at < KEEP_MS; });
+    a.forEach(function (x) { S.hidden.push({ id: x.id, at: at }); });
     if (!MOCK && O && O.keep) O.keep("tvhome.sb.hidden", S.hidden);   // a preview forgets when it is reloaded
-    leave(b, "stop");
+    a.forEach(function (x) { leave(x, "stop"); });
+  }
+  // Up from the app bar with the bugs put away: they come back. False when there are none to bring.
+  function recall() {
+    var d = S.last, games = d && Array.isArray(d.games) ? d.games : [];
+    var ids = games.map(function (g) { return g && g.id; }).filter(function (id) { return id && isHidden(id); });
+    if (!O || S.away || !ids.length) return false;
+    S.hidden = S.hidden.filter(function (x) { return ids.indexOf(x.id) < 0; });
+    if (!MOCK && O.keep) O.keep("tvhome.sb.hidden", S.hidden);
+    // any still on their way out are taken away at once, so the same games can come straight back in
+    S.bugs.forEach(function (b) { if (b.leaving) { clearTimeout(b.goneTimer); if (b.el.parentNode) b.el.parentNode.removeChild(b.el); } });
+    S.bugs = alive(); S.next = null;
+    show(d);
+    plan();
+    return alive().length > 0;
   }
   // Up and down between two bugs. "up" and "down": the focus is leaving by the top or the bottom
   // (app.js says where it goes, and blur() follows).
@@ -559,7 +585,7 @@
     H.down = false; H.id = null;
   }
   // OK goes down: nothing happens yet. Let go quickly and it is a press. Keep holding and the bug
-  // dims while the card's pill fills; let go once it is full (1.2 s) and the game is hidden. Letting
+  // dims while the card's pill fills; let go once it is full (1.2 s) and the bugs are put away. Letting
   // go on the way cancels. Both act when OK comes up, so one press never does both.
   function okDown() {
     var b = S.focus ? find(S.focus) : null;
@@ -573,7 +599,7 @@
     var held = now() - H.at, b = find(H.id);
     holdOff();
     if (!b || b.leaving) return;
-    if (held >= HOLD_MS) hideGame(b);
+    if (held >= HOLD_MS) closeAll();
     else if (held < TAP_MS) act(b);
   }
 
@@ -594,6 +620,8 @@
     // the TV app: a game has come into its window (harmless at any other time)
     wake: wake,
     focusable: function () { return alive().length > 0; },
+    // the bugs were put away with OK: bring them back (app.js, Up from the app bar)
+    recall: recall,
     enter: function () { var a = alive(); S.focus = a.length ? a[0].id : null; paint(); },
     // the focus went somewhere else (a held OK is dropped with it: letting go then does nothing)
     blur: function () {

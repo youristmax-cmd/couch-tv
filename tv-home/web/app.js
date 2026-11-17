@@ -1449,6 +1449,8 @@
         if (cards.length && !SOLAR) zone = "shelf";
         // a score bug is showing: up goes to it (the top one), and the now-playing card is not brought back by this press
         else if (sbOn()) { zone = "sb"; window.scores.enter(); }
+        // the score bugs were put away with OK: up brings them back, and the next up goes on to the card
+        else if (SOLAR && window.scores && window.scores.recall()) { zone = "sb"; window.scores.enter(); }
         // the now-playing card: there while music is on; closed or gone after a pause, up brings the last song back
         else if (SOLAR && window.nowPlaying && window.nowPlaying.recall()) { zone = "np"; window.nowPlaying.enter(); }
         else if (peopleOn()) toPeople();
