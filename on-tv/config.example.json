@@ -8,5 +8,15 @@
   "weather": { "lat": -33.8688, "lon": 151.2093, "place": "Sydney", "timezone": "Australia/Sydney" },
   "country": "AU",
   "ask_enabled": false,
-  "ask_key": ""
+  "ask_key": "",
+  "scores": {
+    "_note": "Game-day score bugs (docs/SCORES.md). MLB only for now. A channel's number and link are yours to fill in; 0 and \"\" mean not filled in.",
+    "teams": [ { "league": "mlb", "team": "LAD" } ],
+    "channels": {
+      "SportsNet LA": { "number": 0, "link": "", "aliases": ["SNLA", "Spectrum SportsNet LA"], "app": "" },
+      "FOX": { "number": 0, "link": "" },
+      "Apple TV": { "app": "" }
+    },
+    "tv_app": "com.att.tv"
+  }
 }

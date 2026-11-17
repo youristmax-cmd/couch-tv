@@ -199,6 +199,15 @@ class HomeActivity : Activity() {
             val a = current?.get() ?: return
             a.runOnUiThread { a.web?.clearCache(false); a.ready = false; a.load() }
         }
+        /**
+         * Tells the home page a game has come into its window (Scores.kt): with no game the page
+         * keeps no timer, so it asks GET /api/scores when this says so. Nothing happens when the
+         * home is not open; it asks by itself when it comes back (tv.resume).
+         */
+        fun wakeScores() {
+            val a = current?.get() ?: return
+            a.runOnUiThread { a.js("window.scores && scores.wake()") }
+        }
         private val GROUND = Color.parseColor("#0D1E19")
         private val FLAP = Color.parseColor("#131614")
     }

@@ -1253,8 +1253,17 @@
     api("POST", "/api/launch", { app: pkg }).catch(function (e) { status(e.message); });
     return true;
   }
+  // the game-day score bugs (scores.js), solar look only
+  function sbOn() { return SOLAR && !!window.scores && window.scores.focusable(); }
+  // OK on a selected bug: the bridge opens the game's channel link, or the app the game is on, and
+  // checks it came to the front. Null in a preview, where there is nothing to open.
+  function openGame(target) {
+    if (MOCK || PREVIEW) return null;
+    return api("POST", "/api/launch", { app: target }, 12000);
+  }
   function clearFocus() {
     if (window.nowPlaying && zone !== "np") window.nowPlaying.blur();
+    if (window.scores && zone !== "sb") window.scores.blur();
     shelfEls.concat(gridEls, quickEls).forEach(function (el) { if (el) el.classList.remove("focus"); });
     $("people").classList.remove("focus");
     Array.prototype.forEach.call($("people").children, function (el) { el.classList.remove("focus"); });
@@ -1293,6 +1302,10 @@
     if (zone === "np") {
       if (npOn()) { window.nowPlaying.paint(); return; }
       zone = "grid";   // the card left while it had the focus
+    }
+    if (zone === "sb") {
+      if (sbOn()) { window.scores.paint(); return; }
+      zone = "grid";   // the bug left while it had the focus
     }
     if (zone === "quick" && quickEls[qi]) {
       quickEls[qi].classList.add("focus");
@@ -1345,10 +1358,25 @@
     if (zone === "inputs") { var dI = dy || dx; if (dI) { ii = Math.max(0, Math.min(INPUTS.length - 1, ii + dI)); renderInputs(); } return; }
     if (zone === "updask") { if (dy) { ai = Math.max(0, Math.min(1, ai + dy)); renderAsk(); } return; }
     if (zone === "np") {
-      // the now-playing card: down is the app bar again, up past the card is the top of the screen
+      // the now-playing card: down is a score bug when one is showing, else the app bar again; up
+      // past the card is the top of the screen
+      var npWas = npOn();
       var out = window.nowPlaying.move(dx, dy, peopleOn() || hasQuick());
-      if (out === "down") zone = "grid";
+      if (out === "down") { if (npWas && sbOn()) { zone = "sb"; window.scores.enter(); } else zone = "grid"; }
       else if (out === "up") { if (peopleOn()) toPeople(); else { zone = "quick"; qi = 0; } }
+      paintFocus();
+      return;
+    }
+    if (zone === "sb") {
+      // a score bug: up and down only. Down past the last bug is the app bar. Up past the first is
+      // the now-playing card, brought back if it can be, else where up from that card goes.
+      var outSb = dy ? window.scores.move(dy) : "stay";
+      if (outSb === "down") zone = "grid";
+      else if (outSb === "up") {
+        if (window.nowPlaying && window.nowPlaying.recall()) { zone = "np"; window.nowPlaying.enter(); }
+        else if (peopleOn()) toPeople();
+        else if (hasQuick()) { zone = "quick"; qi = 0; }
+      }
       paintFocus();
       return;
     }
@@ -1419,6 +1447,8 @@
         }
       } else if (dy < 0 && row === 0) {
         if (cards.length && !SOLAR) zone = "shelf";
+        // a score bug is showing: up goes to it (the top one), and the now-playing card is not brought back by this press
+        else if (sbOn()) { zone = "sb"; window.scores.enter(); }
         // the now-playing card: there while music is on; closed or gone after a pause, up brings the last song back
         else if (SOLAR && window.nowPlaying && window.nowPlaying.recall()) { zone = "np"; window.nowPlaying.enter(); }
         else if (peopleOn()) toPeople();
@@ -1474,7 +1504,7 @@
 
   function activate() {
     touched = true;
-    if (zone === "np") return;   // the card's own OK (nowplaying.js)
+    if (zone === "np" || zone === "sb") return;   // the card's own OK (nowplaying.js), a score bug's (scores.js)
     if (zone === "settings") { setActivate(); return; }
     if (zone === "smart") { window.smartHome.ok(); return; }
     if (zone === "gear") { var gk = gearItems()[gi]; if (gk === "home") openSettings(); else if (gk === "bt") { closeGear(); paintFocus(); openSettingsScreen("bluetooth"); } else openTvSettings(); return; }
@@ -1657,6 +1687,7 @@
     $("apps-section").setAttribute("aria-label", t("apps"));
     $("settings").setAttribute("aria-label", t("set_title"));
     if (window.nowPlaying) window.nowPlaying.words();
+    if (window.scores) window.scores.words();
   }
 
   function openSettings() {
@@ -2429,10 +2460,11 @@
   // OK acts when it is let go, so holding it can pick things up instead (tvOS does the same).
   // Works for remotes that repeat the key while it is held and for ones that only send the press
   // and, later, the release. One press is one action: a pick-up never also opens the app.
-  var okDown = false, okHeld = false, okTimer = null, okNp = false;
+  var okDown = false, okHeld = false, okTimer = null, okNp = false, okSb = false;
   function okReset() {
     okDown = false; okHeld = false; clearTimeout(okTimer);
     if (okNp) { okNp = false; window.nowPlaying.okCancel(); }
+    if (okSb) { okSb = false; window.scores.okCancel(); }
   }
   document.addEventListener("keydown", function (e) {
     if (typingKey(e)) return;   // typing a place or a name: the keys belong to the text box
@@ -2442,6 +2474,8 @@
       okDown = true; okHeld = false;
       // the now-playing card times OK itself: a press, or held 1.2 s to stop the music
       if (zone === "np" && npOn()) { okNp = true; window.nowPlaying.okDown(); return; }
+      // a score bug does the same: a press opens the game, held 1.2 s and let go hides it
+      if (zone === "sb" && sbOn()) { okSb = true; window.scores.okDown(); return; }
       okTimer = setTimeout(function () { okHeld = true; if (!hold()) activate(); ensureFocus(); }, HOLD_MS);
       return;
     }
@@ -2459,6 +2493,7 @@
     e.preventDefault();
     if (!okDown) return;
     if (okNp) { okNp = false; okReset(); window.nowPlaying.okUp(); ensureFocus(); return; }
+    if (okSb) { okSb = false; okReset(); window.scores.okUp(); ensureFocus(); return; }
     var held = okHeld;
     okReset();
     if (!held) activate();
@@ -2583,9 +2618,9 @@
   // the native side calls these
   // Home on the remote also re-reads the lists, so an order arranged on the phone shows straight away
   window.tv = { back: goHome, home: function () { if (zone === "settings") closeSettings(); else goHome(); refresh(); },
-    resume: function () { okReset(); refresh(); if (!OFFLINE) refreshQuick(); refreshWeather(); if (window.nowPlaying) window.nowPlaying.refresh(); },
-    // another app is in front: the now-playing card stops asking until the home is back (resume)
-    away: function () { if (window.nowPlaying) window.nowPlaying.away(); },
+    resume: function () { okReset(); refresh(); if (!OFFLINE) refreshQuick(); refreshWeather(); if (window.nowPlaying) window.nowPlaying.refresh(); if (window.scores) window.scores.refresh(); },
+    // another app is in front: the now-playing card and the score bugs stop asking until the home is back (resume)
+    away: function () { if (window.nowPlaying) window.nowPlaying.away(); if (window.scores) window.scores.away(); },
     // the launcher's file picker has copied the chosen photos into its own storage (Home settings)
     photosAdded: function (names) { photosAdded(names); },
     // the launcher's updater has news (Updater.kt)
@@ -2615,7 +2650,13 @@
       if (window.nowPlaying && !OFFLINE) window.nowPlaying.start({ api: api, t: t, kept: kept, keep: keep, morph: HOME.np_morph,
         launch: openSpotify, icon: function () { return iconUrl("com.spotify.tv.android"); }, gone: function () { if (zone === "np") { zone = "grid"; paintFocus(); } },
         // a mouse click on the card in a browser preview: the focus moves there, as Up from the bar would
-        take: function () { if (["grid", "quick", "people", "shelf", "np"].indexOf(zone) < 0) return; touched = true; zone = "np"; paintFocus(); } });
+        take: function () { if (["grid", "quick", "people", "shelf", "np", "sb"].indexOf(zone) < 0) return; touched = true; zone = "np"; paintFocus(); } });
+      // the game-day score bugs: they need the bridge too
+      if (window.scores && !OFFLINE) window.scores.start({ api: api, t: t, kept: kept, keep: keep, open: openGame,
+        now: function () { return window.Sky.now(); }, clock24: function () { return CLOCK24; },
+        // the TV app's own name, for "OK to open ..." (null when this TV's list of apps does not have it)
+        appName: function (pkg) { var a = data.apps.filter(function (x) { return x.package === pkg; })[0]; return a ? a.name : null; },
+        gone: function () { if (zone === "sb") { zone = "grid"; paintFocus(); } } });
     } else if (NIGHT) {
       buildScenes();
       // ?scene=fog starts on that scene, for previews (?scene=own: the first of the household's

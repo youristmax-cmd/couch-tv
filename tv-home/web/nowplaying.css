@@ -47,8 +47,9 @@
 .np.stopped .np-card { opacity: 0; transform: scale(0.84); transition: opacity 450ms ease-in, transform 450ms ease-in; }
 
 /* the whole card selected: no ring. It lifts, its rim brightens a little and its shadow deepens. */
-.np.sel .np-card {
-  transform: scale(1.03);
+.np.sel .np-card { transform: scale(1.03); }
+/* (a selected score bug's body, scores.css, takes the same rim and shadow) */
+.np.sel .np-card, .sb.sel .np-card {
   box-shadow: inset 0 0 0 0.09375rem rgba(255, 255, 255, 0.38), inset 0.125rem 0.125rem 0 -0.03125rem rgba(255, 255, 255, 0.85),
     inset -0.09375rem -0.09375rem 0 -0.03125rem rgba(255, 255, 255, 0.3), inset 0 -1rem 1.75rem -1rem rgba(0, 0, 0, 0.26),
     inset 0 1rem 1.75rem -1.125rem rgba(255, 255, 255, 0.46), 0 2.5rem 5.625rem rgba(0, 0, 0, 0.55);
@@ -148,12 +149,13 @@
 .np-l .np-play { width: 5.25rem; height: 5.25rem; }
 .np-l .np-play svg { width: 2.375rem; height: 2.375rem; }
 
-/* C. OK held: a dark veil, and a pill that fills from the left in 1.2 s. Let go early and it empties in 0.25 s. */
+/* C. OK held: a dark veil, and a pill that fills from the left in 1.2 s. Let go early and it empties in 0.25 s.
+   (A score bug, .sb in scores.css, has the same veil and pill inside its body.) */
 .np-veil {
   position: absolute; z-index: 3; top: 0; right: 0; bottom: 0; left: 0; display: flex; align-items: center; justify-content: center;
   background: rgba(8, 12, 18, 0.45); opacity: 0; transition: opacity 200ms ease;
 }
-.np.holding .np-veil { opacity: 1; }
+.np.holding .np-veil, .sb.holding .np-veil { opacity: 1; }
 .np.holding .np-tip { opacity: 0; }   /* one message at a time */
 .np-hold {
   position: relative; width: 20rem; height: 3.625rem; border-radius: 1.8125rem; overflow: hidden; display: flex; align-items: center; justify-content: center;
@@ -161,7 +163,7 @@
   font-size: 1.375rem; line-height: 1.75rem; font-weight: 600; color: #fff;
 }
 .np-hold i { position: absolute; top: 0; bottom: 0; left: 0; width: 100%; background: rgba(255, 255, 255, 0.36); transform-origin: 0 50%; transform: scaleX(0); transition: transform 250ms ease-out; }
-.np.press .np-hold i { transform: scaleX(1); transition: transform 1200ms linear; }
+.np.press .np-hold i, .sb.press .np-hold i { transform: scaleX(1); transition: transform 1200ms linear; }
 .np-hold span { position: relative; }
 
 /* browser previews (nowplaying.js mouse()): the card can be clicked, and the pointer shows */

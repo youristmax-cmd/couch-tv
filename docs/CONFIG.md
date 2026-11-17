@@ -156,6 +156,34 @@ Home settings saves to the same `bridge/data/people.json` the phone uses.
 | `dock_size` [10] | How many apps sit in the Night dock before Settings and More apps. 1 to 10. Everything else is behind More apps. The phone's Arrange apps keeps to the same number. |
 | `np_morph` [`layout`] | The Spotify now-playing card on the landscape home ([SPOTIFY.md](SPOTIFY.md)): how its small and large sizes change into each other. `layout` moves and resizes the card; `flip` does the same with transforms only, for a TV that drops frames; `fade` is a plain crossfade. |
 | `language` [the TV's own language if the home speaks it, else `en`] | The TV home's language until someone picks one in Home settings: `en` (English), `es` (Spanish), `es-MX` (Mexican Spanish) or `it` (Italian). The phone remote has its own choice, "Same as the TV" by default. |
+| `scores` [the Dodgers and the Clippers, no channels, DirecTV] | Game-day score bugs on the landscape home ([SCORES.md](SCORES.md)): `teams`, `channels` and `tv_app`, below. The on-TV app (option C) only. |
+
+### Score bugs (`home.scores`)
+
+While one of your teams is playing, a small score bug shows on the home, and OK on it opens your TV
+service's app for the game ([SCORES.md](SCORES.md)). Only the on-TV app (option C) has it, and
+that app has no `config.json`: it keeps these three keys itself, and you change them on the phone's
+setup page (`http://<tv address>:5400/setup`, **Score bugs**) or with `POST /api/settings`
+(`{"scores": {...}}`, or `{"home": {"scores": {...}}}` as written here).
+
+```json
+"home": {
+  "scores": {
+    "teams": [ { "league": "mlb", "team": "LAD" } ],
+    "channels": {
+      "SportsNet LA": { "number": 690, "link": "", "aliases": ["SNLA", "Spectrum SportsNet LA"], "app": "" },
+      "FOX": { "number": 11, "link": "" }
+    },
+    "tv_app": "com.att.tv"
+  }
+}
+```
+
+| Key | What it does |
+|---|---|
+| `teams` [`[{"league": "mlb", "team": "LAD"}, {"league": "nba", "team": "LAC"}]`] | Whose games show, up to 8: a league and the team's abbreviation as the league writes it. Only `mlb` has a feed; a team in another league shows nothing (SCORES.md says why there is no NBA). Adding a team is only this. |
+| `channels` [none] | Which channel each network is on your TV service. The key is the network's name as the league's feed writes it. `number` [0]: the channel number, shown on the bug. `link` [""]: a link that opens your TV app on that channel. `aliases` [none]: other names for the same network. `app` [""]: an Android package to open instead of the TV app, for a game only on a streaming service. Names are matched without capitals, spaces or punctuation. |
+| `tv_app` [`com.att.tv`, DirecTV on a Fire TV] | The Android package of your TV service's app, opened when the game's channel has no `link` (or no channel matched). |
 
 ## Apps on the home
 

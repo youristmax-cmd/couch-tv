@@ -30,6 +30,7 @@ home button unless you switch that on.
 | Picture mode, screens, Moonlight | yes | no | |
 | Home screen (TV home page) | yes | yes, optional | Same page, served from the app. Replacing Google's home needs one ADB command, see below. |
 | Live updates (`/api/events`) | yes | yes | Server-sent events, plus a WebSocket at `/api/ws`. |
+| Game-day score bugs | no | yes, MLB | On the landscape home while your team plays. See "Score bugs" below. |
 
 ## Which TVs
 
@@ -179,6 +180,20 @@ scenes, apps, people, quick buttons; README, "Settings on the TV"). They are kep
 setup page edits. One difference: this app has no file picker, so your own photos come from a web
 address.
 
+## Score bugs (optional)
+
+While one of your teams is playing, the landscape home shows a small score bug at the top left
+(teams, score, inning, bases and outs), from 60 minutes before the start until 15 minutes after the
+end. OK on it opens your TV service's app for the game. **MLB only**: the scores come from MLB's
+own Stats API, which needs no key; the NBA's scoreboard refused a plain request when this was
+built, so there is no NBA. [docs/SCORES.md](../docs/SCORES.md) has all of it.
+
+The teams, and which channel each network is on your TV service, are set on the phone's setup page
+(`http://<tv-ip>:5400/setup`, **Score bugs**). Left alone, the team is the Dodgers. The app looks
+at the team's schedule every 15 minutes (about a kilobyte) and asks for more only while a game is
+near and the home screen is in front. To switch it off, save an empty team list
+(`"teams": []`).
+
 ## Power on
 
 The TV cannot wake itself: in standby the app is not running. Use the TV's own remote, HDMI-CEC
@@ -227,7 +242,12 @@ out every computer, so reconnect yours afterwards).
 - `Finder.kt` and `Apps.kt`: the computer bridge's JustWatch lookup, app table and deep-link rules.
 - `web/shim.js`: added to the phone remote's page by the TV app. It pairs the phone and adds the
   token to every call, so the remote itself is unchanged and the same build works with both modes.
-- `web/setup.html`: the phone setup page (ADB, wireless debugging pairing, names, weather, ask).
+- `Scores.kt` and `ScoreFeeds.kt`: the score bugs. `Scores.kt` asks MLB's Stats API and keeps the
+  time (the 15 minute schedule look, readings only while the home asks, the logo cache);
+  `ScoreFeeds.kt` is every rule about what an answer means (which games show and in what order,
+  the channel for a game), with no network and no Android in it, so it is tested on a computer.
+- `web/setup.html`: the phone setup page (ADB, wireless debugging pairing, names, weather, ask,
+  score bugs).
 - Endpoints are those in `bridge/API.md`, plus `/api/pair`, `/api/pair/start`, `/api/adb`,
   `/api/adb/connect`, `/api/adb/pair`, `/api/settings`, `/api/phones/forget` and `/api/ws`.
 
@@ -236,3 +256,7 @@ out every computer, so reconnect yours afterwards).
 `scripts/emulator-test.mjs` drives an Android TV emulator end to end (pairing, 401s, loopback ADB
 with the real "Allow debugging?" dialog, keys, launch, deep link, volume, power, the phone page at
 390x664). It refuses to run against anything that is not an emulator.
+
+`tv-home/android/gradlew -p on-tv/android :app:testReleaseUnitTest` (from the repo folder, with
+the same JDK and Android SDK as a build) runs the score bugs' rules on the computer, with no TV and
+no emulator, against answers recorded from MLB's Stats API (`android/app/src/test/`).

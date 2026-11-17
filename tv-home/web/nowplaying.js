@@ -281,6 +281,8 @@
   }
   function big(on) {
     document.documentElement.classList.toggle("np-big", !!on);
+    // the score bugs (scores.css) sit under the card while it shows small
+    document.documentElement.classList.toggle("np-small", S.on && !S.leaving && S.size === "small");
     if (O && O.big) O.big(!!on);
   }
 

@@ -51,6 +51,10 @@ dependencies {
     implementation("org.conscrypt:conscrypt-android:2.5.3")
     // Makes the self-signed certificate the ADB TLS handshake needs.
     implementation("org.bouncycastle:bcpkix-jdk15to18:1.81")
+    // Tests that run on the computer, no TV (src/test: the score bugs' rules against recorded
+    // answers). JUnit, and a real org.json: off the device, Android's own is an empty stub.
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }
 
 // The phone remote and the TV home are built elsewhere in the repo. Copy them in before every build.

@@ -99,6 +99,9 @@ class Server(private val ctx: Context, port: Int) : NanoWSD(port) {
                 return json(200, ok().put("token", token))
             }
         }
+        // A team's or league's logo from the app's own cache, for the home's score bugs. No token, as
+        // for /icon/: an <img> cannot send one, and these are public pictures under names the app made.
+        if (m == Method.GET && path.startsWith("/api/scores/logo/")) return scoreLogo(path.removePrefix("/api/scores/logo/"))
         if (!authed(s)) return json(401, err("pair this phone first: open this page on your phone and type the code from the TV"))
 
         val q = { k: String -> s.parameters[k]?.firstOrNull() }
@@ -246,6 +249,8 @@ class Server(private val ctx: Context, port: Int) : NanoWSD(port) {
                 json(200, ok(Spotify.status()))
             }
             "POST /api/spotify/forget" -> { Spotify.forget(); json(200, ok(Spotify.status())) }
+            // Game-day score bugs for the home: the configured teams' games that are on, or about to be.
+            "GET /api/scores" -> json(200, ok(Scores.answer()))
             "GET /api/settings" -> json(200, settings())
             "POST /api/settings" -> { saveSettings(body(s)); json(200, settings()) }
             "POST /api/phones/forget" -> { Auth.forgetAll(); json(200, ok().put("note", "Every phone must pair again.")) }
@@ -256,7 +261,20 @@ class Server(private val ctx: Context, port: Int) : NanoWSD(port) {
     private fun launch(target: String): Response {
         if (target.isEmpty()) throw ApiError(400, "app is required")
         if ("://" in target || target.startsWith("intent:")) {
-            Tv.startUri(target, Apps.packageForLink(target)?.takeIf { Tv.hasPackage(it) }); Thread.sleep(1500)
+            // The app this link should open, when that is known: a known site's app (youtube.com), or
+            // the app of a channel in the score bugs' table (a DirecTV channel link).
+            val pkg = (Apps.packageForLink(target) ?: Scores.packageForLink(target))?.takeIf { Tv.hasPackage(it) }
+            Tv.startUri(target, pkg)
+            if (pkg != null && Adb.connected) {
+                // As for an app by name: it must really come to the front, or the caller is told.
+                // Any of the app's packages counts (a Fire TV has Amazon's YouTube beside Google's).
+                val got = Tv.waitForApp((Apps.BY_PACKAGE[pkg]?.pkgs ?: listOf(pkg)).toSet(), 8000)
+                    ?: throw ApiError(504, "asked the TV to open that in ${Apps.describe(pkg)?.get("name") ?: pkg} but it did not come up")
+                Now.push()
+                return json(200, ok().put("app", JSONObject(Apps.describe(got)!!)))
+            }
+            // A link nobody can name the app for, or no ADB to look with: as before, say what is in front.
+            Thread.sleep(1500)
             return json(200, ok().put("app", Apps.describe(Tv.frontPackage())?.let { JSONObject(it) } ?: JSONObject.NULL))
         }
         if (target == "settings" && FireHome.isFireTv) {
@@ -353,6 +371,8 @@ class Server(private val ctx: Context, port: Int) : NanoWSD(port) {
         .put("ask", JSONObject().put("enabled", Store.bool("ask_enabled")).put("has_key", !Store.str("ask_key").isNullOrEmpty()).put("model", Ask.MODEL))
         .put("phones", Auth.phoneCount()).put("port", Store.port).put("adb", JSONObject(Adb.status()))
         .put("fire_remote", JSONObject(FireRemote.status()))
+        // home.scores: the score bugs' teams, channel table and TV app (docs/SCORES.md)
+        .put("scores", Scores.config())
 
     /** {"people": [...]} replaces the list; {"order": [ids]} only reorders it. */
     private fun savePeople(b: JSONObject) {
@@ -376,6 +396,9 @@ class Server(private val ctx: Context, port: Int) : NanoWSD(port) {
     }
 
     private fun saveSettings(b: JSONObject) {
+        // The score bugs' settings (docs/SCORES.md), as "scores" or the way config.json writes them,
+        // "home": {"scores": ...}. First, as a wrong shape is refused before anything else is saved.
+        (b.optJSONObject("scores") ?: b.optJSONObject("home")?.optJSONObject("scores"))?.let { Scores.setConfig(it) }
         b.optJSONObject("settings")?.let {
             if (it.toString().length > 32_000) throw ApiError(413, "settings are too big")
             Store.writeJson("home-settings.json", it)
@@ -532,6 +555,20 @@ class Server(private val ctx: Context, port: Int) : NanoWSD(port) {
         val png = AppArt.icon(ctx, pkg, squareOnly = true) ?: return json(404, err("no icon"))
         return newFixedLengthResponse(Response.Status.OK, "image/png", java.io.ByteArrayInputStream(png), png.size.toLong())
             .apply { addHeader("Cache-Control", "max-age=86400") }
+    }
+
+    /**
+     * A logo the app fetched from the league (Scores.kt), for an <img> on the home. Kept by the
+     * browser for a week. The last two headers are for a picture someone else drew: it is only ever
+     * a picture here, even if opened as a page.
+     */
+    private fun scoreLogo(file: String): Response {
+        val f = Scores.logoFile(file) ?: return json(404, err("no such logo"))
+        return newFixedLengthResponse(Response.Status.OK, "image/svg+xml", java.io.FileInputStream(f), f.length()).apply {
+            addHeader("Cache-Control", "max-age=604800")
+            addHeader("X-Content-Type-Options", "nosniff")
+            addHeader("Content-Security-Policy", "sandbox; default-src 'none'; style-src 'unsafe-inline'")
+        }
     }
 
     private fun json(status: Int, o: JSONObject): Response =

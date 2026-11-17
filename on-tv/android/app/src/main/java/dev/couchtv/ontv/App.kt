@@ -145,6 +145,7 @@ class BridgeService : Service() {
         multicast = runCatching { wm.createMulticastLock("couchtv-mdns").apply { setReferenceCounted(false); acquire() } }.getOrNull()
         startServer()
         Now.start()
+        Scores.start()   // the 15 minute look at the teams' schedules (the only score work while no game is near)
         Thread {
             runCatching { if (Adb.everAllowed || Adb.paired) Adb.ensure() }
             FireHome.poke()   // Fire TV: keep this home on the Home key across reboots
