@@ -86,7 +86,12 @@ class HomeActivity : Activity() {
 
     override fun onStart() { super.onStart(); current = java.lang.ref.WeakReference(this) }
 
-    override fun onResume() { super.onResume(); hideBars(); if (ready) js("window.tv && tv.resume()") }
+    override fun onResume() {
+        super.onResume()
+        resumedAt = android.os.SystemClock.elapsedRealtime(); inFront = true
+        hideBars(); if (ready) js("window.tv && tv.resume()")
+    }
+    override fun onPause() { inFront = false; super.onPause() }
     // Another app is in front: the page stops asking for things only the home shows (Spotify's now playing)
     override fun onStop() { super.onStop(); if (ready) js("window.tv && tv.away && tv.away()") }
     override fun onNewIntent(i: Intent) { super.onNewIntent(i); js("window.tv && tv.home()") }
@@ -194,6 +199,18 @@ class HomeActivity : Activity() {
 
     companion object {
         @Volatile private var current: java.lang.ref.WeakReference<HomeActivity>? = null
+        /**
+         * When the home last came to the front (elapsedRealtime; 0: never). Server.launch asks: a
+         * channel link is not sent a second time once somebody has come back to the home.
+         */
+        @Volatile var resumedAt = 0L
+            private set
+        /**
+         * Is the home in front right now (between its onResume and onPause)? Without ADB this is
+         * all Server.launch can know about what is on screen when a channel link is sent.
+         */
+        @Volatile var inFront = false
+            private set
         /** Reloads the home page if it is open (live edits, /api/dev/tv-reload). */
         fun reloadNow() {
             val a = current?.get() ?: return

@@ -8,7 +8,7 @@ import org.json.JSONObject
  * games to show out. Nothing here touches the network, a clock or Android, so every rule can be
  * checked on a computer against recorded answers (app/src/test).
  *
- * MLB only for now. The feed is MLB's Stats API, checked in November 2026 against recorded games:
+ * MLB: the feed is MLB's own Stats API, checked in November 2026 against recorded games:
  *  - the schedule (one entry per game: start, status, teams, score, TV broadcasts). A postponed
  *    game says abstractGameState "Final" with codedGameState "D", and its gamePk comes back again
  *    on the day it is made up, so the two are kept apart here.
@@ -16,9 +16,14 @@ import org.json.JSONObject
  *    is about 500 bytes.
  * Every status word the API uses is listed at /api/v1/gameStatus; mlbState() below follows that list.
  *
- * Another league later: its own parsing here (as mlbSchedule and mlbFeed are), its detail beside
- * "mlb" in json(), and one more League in Scores.kt. The window, the order and the channel
- * matching are not about any one league.
+ * NBA: ESPN's public scoreboard JSON (not the NBA's own feed, which refuses a plain request, and
+ * not an official or documented one), checked in November 2026 against recorded games:
+ *  - a team's entry, whose "nextEvent" is its next game (start, teams, broadcasts);
+ *  - one event (status with period and clock, both scores, broadcasts, logo addresses).
+ *
+ * Another league later: its own parsing here, its detail beside "mlb" and "nba" in json(), and
+ * one more League in Scores.kt. The window, the order and the channel matching are not about any
+ * one league.
  */
 object ScoreFeeds {
     const val PRE_MS = 60 * 60_000L          // a game shows from 60 minutes before its scheduled start
@@ -27,9 +32,13 @@ object ScoreFeeds {
     const val STALL_MS = 3 * 60 * 60_000L    // not started, or stopped by a delay: gone after 3 hours of nothing
     const val MAX_GAMES = 2
 
-    class Broadcast(val name: String, val callSign: String, val side: String, val national: Boolean) {
-        /** "TBS (out-of-market only)": the feed's way of saying it is not shown where a team's own channel has the game. */
-        val outOfMarket get() = name.contains("out-of-market", ignoreCase = true)
+    /** side: "home" | "away" (whose broadcast it is). kind: "tv" | "stream" | "package" (a subscription such as NBA League Pass). */
+    class Broadcast(val name: String, val callSign: String, val side: String, val national: Boolean, val kind: String = "tv") {
+        /**
+         * Not shown where a team's own channel has the game: "TBS (out-of-market only)" in MLB's
+         * words, and an out-of-market package (NBA League Pass) in ESPN's list.
+         */
+        val outOfMarket get() = name.contains("out-of-market", ignoreCase = true) || kind == "package"
     }
 
     class Channel(val name: String, val number: Int, val link: String, val app: String, val aliases: List<String>) {
@@ -48,12 +57,23 @@ object ScoreFeeds {
         val awayAbbr: String, val awayId: Int, val awayScore: Int?,
         val homeAbbr: String, val homeId: Int, val homeScore: Int?,
         val broadcasts: List<Broadcast>,
-        val inning: Int, val scheduledInnings: Int, val half: String,   // half: "top" | "bottom"
-        val outs: Int, val first: Boolean, val second: Boolean, val third: Boolean,
+        // baseball
+        val inning: Int = 0, val scheduledInnings: Int = 9, val half: String = "top",   // half: "top" | "bottom"
+        val outs: Int = 0, val first: Boolean = false, val second: Boolean = false, val third: Boolean = false,
+        // basketball: the period (1 to 4, then 5 for overtime, 6 for the second...), the clock as the
+        // feed writes it and in seconds, and whether it is halftime
+        val period: Int = 0, val clock: String = "", val clockSecs: Double = 0.0, val halftime: Boolean = false,
+        // where the feed says each team's logo is (ESPN gives an address; MLB's is worked out from the team id)
+        val awayLogo: String? = null, val homeLogo: String? = null,
     ) {
         /** League and the feed's game id. A postponed entry gets its own id: the game made up later reuses the gamePk. */
         val id get() = "$league-$pk" + if (off) "-off" else ""
-        val finalLabel get() = if (state != "final") null else if (inning > 0 && inning != scheduledInnings) "F/$inning" else "FINAL"
+        /** FINAL; baseball that did not end in its scheduled inning, F/10; basketball after overtime, F/OT, F/2OT. */
+        val finalLabel get() = when {
+            state != "final" -> null
+            league == "nba" -> if (period <= 4) "FINAL" else if (period == 5) "F/OT" else "F/${period - 4}OT"
+            else -> if (inning > 0 && inning != scheduledInnings) "F/$inning" else "FINAL"
+        }
     }
 
     /** What the app remembers about a game between readings (when it first saw it final, or stopped). */
@@ -245,6 +265,239 @@ object ScoreFeeds {
         )
     }
 
+    // ---------------------------------------------------------------- NBA (ESPN's scoreboard)
+
+    class NbaTeam(val id: Int, val abbr: String, val games: List<Game>)
+
+    /**
+     * ESPN's "teams/<abbreviation>": the team's id, and the game its "nextEvent" names (the next one
+     * until about tip-off, then the one after). Null when ESPN has no such team: it answers {}.
+     */
+    fun nbaTeam(json: JSONObject): NbaTeam? {
+        val t = json.optJSONObject("team") ?: return null
+        val id = t.optString("id").toIntOrNull() ?: return null
+        val out = ArrayList<Game>()
+        val next = t.optJSONArray("nextEvent")
+        if (next != null) for (i in 0 until next.length()) next.optJSONObject(i)?.let { e -> nbaEvent(e, id)?.let { out += it } }
+        return NbaTeam(id, t.optString("abbreviation"), out)
+    }
+
+    class NbaState(val state: String, val status: String, val detail: String, val off: Boolean = false,
+                   val suspended: Boolean = false, val halftime: Boolean = false)
+
+    /**
+     * ESPN's status in the bug's four states, from its type's "state" (pre, in, post) and "name".
+     * Seen in November 2026: STATUS_SCHEDULED, STATUS_IN_PROGRESS, STATUS_END_PERIOD, STATUS_HALFTIME,
+     * STATUS_FINAL, and STATUS_POSTPONED (state "post", not completed, no score). Other names are
+     * taken by what they contain, as ESPN publishes no list. status is its "description"
+     * ("In Progress", "Halftime", "Postponed"), detail its "detail" ("6:21 - 2nd Quarter", "Final/OT").
+     */
+    fun nbaState(status: JSONObject?): NbaState? {
+        val type = status?.optJSONObject("type") ?: return null
+        val name = type.optString("name").uppercase()
+        val st = type.optString("state")
+        val word = type.optString("description").trim()
+        val detail = type.optString("detail").trim()
+        val mk = { state: String, unnamed: String, off: Boolean, suspended: Boolean, half: Boolean ->
+            NbaState(state, word.ifEmpty { unnamed }, detail.ifEmpty { word.ifEmpty { unnamed } }, off, suspended, half)
+        }
+        return when {
+            "POSTPON" in name -> mk("delayed", "Postponed", true, false, false)
+            "CANCEL" in name -> mk("delayed", "Canceled", true, false, false)
+            "SUSPEND" in name -> mk("delayed", "Suspended", false, true, false)
+            "DELAY" in name -> mk("delayed", "Delayed", false, false, false)
+            "FINAL" in name || "FORFEIT" in name || (st == "post" && type.optBoolean("completed")) -> mk("final", "Final", false, false, false)
+            st == "in" && "HALFTIME" in name -> mk("live", "Halftime", false, false, true)
+            st == "in" -> mk("live", "In Progress", false, false, false)
+            st == "pre" -> mk("pre", "Scheduled", false, false, false)
+            // over without being played out, in words not seen yet: the feed's word, around the start time only
+            st == "post" -> mk("delayed", "Off", true, false, false)
+            else -> null
+        }
+    }
+
+    /**
+     * One ESPN event (an entry of "nextEvent", or the answer to scoreboard/<event id>) as a game
+     * of the team with this id. Null when the team is not in it, the status is not understood, or
+     * the game has no time yet (timeValid false).
+     */
+    fun nbaEvent(e: JSONObject, teamId: Int): Game? {
+        val pk = e.optString("id").toLongOrNull() ?: return null
+        val c = e.optJSONArray("competitions")?.optJSONObject(0) ?: return null
+        val list = c.optJSONArray("competitors") ?: return null
+        var away: JSONObject? = null; var home: JSONObject? = null
+        for (i in 0 until list.length()) {
+            val x = list.optJSONObject(i) ?: continue
+            if (x.optString("homeAway") == "home") home = x else if (x.optString("homeAway") == "away") away = x
+        }
+        if (away == null || home == null) return null
+        val awayTeam = away.optJSONObject("team"); val homeTeam = home.optJSONObject("team")
+        val awayId = awayTeam?.optString("id")?.toIntOrNull() ?: 0
+        val homeId = homeTeam?.optString("id")?.toIntOrNull() ?: 0
+        if (awayId != teamId && homeId != teamId) return null
+        val status = c.optJSONObject("status") ?: e.optJSONObject("status")
+        val st = nbaState(status) ?: return null
+        val start = parseIso(e.optString("date").ifEmpty { c.optString("date") }) ?: return null
+        val noTime = (c.has("timeValid") && !c.optBoolean("timeValid")) || (e.has("timeValid") && !e.optBoolean("timeValid"))
+        if (st.state == "pre" && noTime) return null
+        val period = status?.optInt("period") ?: 0
+        val secs = status?.optDouble("clock", 0.0)?.takeIf { !it.isNaN() } ?: 0.0
+        // ESPN writes "0" for both scores before the game and for one that is off: no score then
+        val played = st.state == "live" || st.state == "final" || (st.state == "delayed" && !st.off && period > 0)
+        return Game(
+            league = "nba", pk = pk, startMs = start,
+            state = st.state, status = st.status, statusDetail = st.detail, off = st.off, suspended = st.suspended,
+            ourSide = if (homeId == teamId) "home" else "away",
+            awayAbbr = awayTeam?.optString("abbreviation").orEmpty(), awayId = awayId, awayScore = if (played) espnScore(away) else null,
+            homeAbbr = homeTeam?.optString("abbreviation").orEmpty(), homeId = homeId, homeScore = if (played) espnScore(home) else null,
+            broadcasts = espnBroadcasts(c),
+            period = period, clock = nbaClock(status?.optString("displayClock").orEmpty(), secs), clockSecs = secs, halftime = st.halftime,
+            awayLogo = espnLogoOf(awayTeam), homeLogo = espnLogoOf(homeTeam),
+        )
+    }
+
+    /** A score as ESPN writes it in one answer or another: "41", 41, or {"value": 41.0, "displayValue": "41"}. */
+    private fun espnScore(x: JSONObject): Int? = when (val s = x.opt("score")) {
+        is Number -> s.toInt()
+        is String -> s.trim().toIntOrNull()
+        is JSONObject -> if (s.has("value")) s.optDouble("value").takeIf { !it.isNaN() }?.toInt() else s.optString("displayValue").trim().toIntOrNull()
+        else -> null
+    }
+
+    /**
+     * TV, streaming and packages (not radio), each name once, in the feed's order. ESPN lists them
+     * two ways: {"market": "home", "names": [...]}, and one object each with type, market and
+     * media. The second says more (TV or streaming), so "geoBroadcasts" is read when it is there.
+     */
+    private fun espnBroadcasts(c: JSONObject): List<Broadcast> {
+        val out = ArrayList<Broadcast>()
+        fun add(name: String, market: String, type: String) {
+            val n = name.trim(); val m = market.lowercase(); val k = type.lowercase()
+            if (n.isEmpty() || k == "radio" || out.any { it.name == n }) return
+            out += Broadcast(n, "", if (m == "home" || m == "away") m else "", m == "national",
+                if (k.startsWith("stream")) "stream" else if (k.contains("package")) "package" else "tv")
+        }
+        val geo = c.optJSONArray("geoBroadcasts")
+        val list = if (geo != null && geo.length() > 0) geo else c.optJSONArray("broadcasts")
+        if (list != null) for (i in 0 until list.length()) {
+            val b = list.optJSONObject(i) ?: continue
+            val names = b.optJSONArray("names")
+            if (names != null) for (k in 0 until names.length()) add(names.optString(k), b.optString("market"), "")
+            else add(b.optJSONObject("media")?.optString("shortName").orEmpty(), b.optJSONObject("market")?.optString("type").orEmpty(),
+                b.optJSONObject("type")?.optString("shortName").orEmpty())
+        }
+        return out
+    }
+
+    /**
+     * Where ESPN says a logo is, from a team object or the league's: the one drawn for a dark
+     * background when it names one ("logoDark", or a "logos" entry marked dark), else the usual one.
+     */
+    fun espnLogoOf(o: JSONObject?): String? {
+        if (o == null) return null
+        o.optString("logoDark").takeIf { it.isNotEmpty() }?.let { return it }
+        var dark: String? = null; var usual: String? = null
+        val logos = o.optJSONArray("logos")
+        if (logos != null) for (i in 0 until logos.length()) {
+            val l = logos.optJSONObject(i) ?: continue
+            val href = l.optString("href").takeIf { it.isNotEmpty() } ?: continue
+            val rel = l.optJSONArray("rel")?.let { r -> (0 until r.length()).map { r.optString(it) } } ?: emptyList()
+            if ("dark" in rel && dark == null) dark = href
+            if ("default" in rel && usual == null) usual = href
+        }
+        return dark ?: o.optString("logo").takeIf { it.isNotEmpty() } ?: usual
+    }
+
+    /**
+     * An ESPN logo address, asked at a modest size through ESPN's own resizer (its dark league
+     * logo already comes that way, at 500 px; a team's 500 px picture is 60 KB, at 200 px 16 KB).
+     * Only https addresses on espncdn.com are used at all: null for anything else. An address that
+     * is not one of its /i/... pictures is used as it is.
+     */
+    fun espnLogo(href: String?, px: Int): String? {
+        val h = href?.trim().orEmpty()
+        val m = Regex("""^https://(?:[a-z0-9-]+\.)*espncdn\.com(/[^?#]*)(?:\?([^#]*))?$""").find(h) ?: return null
+        val path = m.groupValues[1]
+        val img = when {
+            path == "/combiner/i" -> m.groupValues[2].split('&').firstOrNull { it.startsWith("img=") }?.removePrefix("img=")
+            path.startsWith("/i/") -> path
+            else -> null
+        }
+        if (img == null || !Regex("""/i/[A-Za-z0-9/_.-]+\.png""").matches(img)) return h
+        return "https://a.espncdn.com/combiner/i?img=$img&w=$px&h=$px&transparent=true"
+    }
+
+    const val FOLLOW_DONE_MS = 30 * 60_000L          // a game that is over is read this much longer (its bug stays 15 minutes)
+    const val FOLLOW_GIVE_UP_MS = 10 * 60 * 60_000L  // nobody follows a game more than 10 hours past its start
+
+    /**
+     * ESPN's team entry names a game only until about tip-off, so a game seen there is followed
+     * by its own id afterwards. At each 15 minute look, for a followed game the entry no longer
+     * names: "wait" (its hour has not come: 60 minutes before the start), "read" it by its id, or
+     * "forget" it (30 minutes after it was seen over, or 10 hours past its start whatever happened).
+     */
+    fun nbaFollow(start: Long, doneAt: Long, now: Long): String = when {
+        (doneAt > 0 && now > doneAt + FOLLOW_DONE_MS) || now > start + FOLLOW_GIVE_UP_MS -> "forget"
+        now < start - PRE_MS -> "wait"
+        else -> "read"
+    }
+
+    /**
+     * When a followed game counts as over, for the 30 minutes above: now, the first time it is seen
+     * final or suspended; for one that is off (postponed), not before the time it was to start, as
+     * its word shows until 15 minutes after that. 0 while it is still to be played or being played.
+     */
+    fun nbaDoneAt(g: Game, now: Long): Long = when {
+        g.off -> maxOf(now, g.startMs)
+        g.state == "final" || g.suspended -> now
+        else -> 0L
+    }
+
+    /** "1ST" to "4TH", then "OT", "2OT", "3OT"...; nothing before the game. */
+    fun nbaPeriod(period: Int): String = when {
+        period <= 0 -> ""
+        period == 1 -> "1ST"; period == 2 -> "2ND"; period == 3 -> "3RD"; period == 4 -> "4TH"
+        period == 5 -> "OT"
+        else -> "${period - 4}OT"
+    }
+
+    /** How much of the period is left, 0 to 1: a quarter is 12 minutes, an overtime 5. */
+    fun nbaRemaining(period: Int, secs: Double): Double = (secs / (if (period <= 4) 720.0 else 300.0)).coerceIn(0.0, 1.0)
+
+    /** The clock as the feed writes it ("6:21", and "45.3" inside the last minute); "0:00" where it writes "0.0". */
+    fun nbaClock(display: String, secs: Double): String {
+        val d = display.trim()
+        if (secs <= 0.0) return "0:00"
+        if (d.isNotEmpty() && d != "0.0") return d
+        val whole = secs.toInt()
+        return "%d:%02d".format(java.util.Locale.US, whole / 60, whole % 60)
+    }
+
+    // ---------------------------------------------------------------- logo files
+
+    /** Width and height from a PNG's own header, or null when the bytes are not a PNG. */
+    fun pngSize(b: ByteArray): Pair<Int, Int>? {
+        val sig = intArrayOf(0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
+        if (b.size < 24 || sig.indices.any { (b[it].toInt() and 0xFF) != sig[it] }) return null
+        if (String(b, 12, 4, Charsets.US_ASCII) != "IHDR") return null
+        val int = { at: Int -> ((b[at].toInt() and 0xFF) shl 24) or ((b[at + 1].toInt() and 0xFF) shl 16) or ((b[at + 2].toInt() and 0xFF) shl 8) or (b[at + 3].toInt() and 0xFF) }
+        return int(16) to int(20)
+    }
+
+    /**
+     * Is a downloaded logo worth keeping? "svg": a real, plain drawing, never an error page, never
+     * one that carries a script. "png": the PNG signature and header, at most 1024 px a side.
+     * Either: 200 KB at most.
+     */
+    fun picture(ext: String, bytes: ByteArray): Boolean = when (ext) {
+        "svg" -> {
+            val text = String(bytes, Charsets.UTF_8).trimStart()
+            bytes.size in 50..200_000 && (text.startsWith("<svg") || text.startsWith("<?xml")) && !text.contains("<script", ignoreCase = true)
+        }
+        "png" -> bytes.size in 67..200_000 && pngSize(bytes)?.let { (w, h) -> w in 1..1024 && h in 1..1024 } == true
+        else -> false
+    }
+
     // ---------------------------------------------------------------- which games show, and in what order
 
     /**
@@ -376,6 +629,17 @@ object ScoreFeeds {
         val on = g.state == "live" || (g.state == "delayed" && g.awayScore != null)
         if (g.league == "mlb") o.put("mlb", JSONObject().put("inning", g.inning).put("half", g.half).put("outs", if (on) g.outs.coerceIn(0, 3) else 0)
             .put("first", on && g.first).put("second", on && g.second).put("third", on && g.third))
+        // Basketball: the period's label, the clock, and how much of the period is left. The clock
+        // runs only while a period is being played: 0 left at halftime (where the feed can leave
+        // "0.1" standing), at the end of a period and after the game (where it leaves "12:00" or
+        // "5:00").
+        if (g.league == "nba") {
+            val playing = g.state == "live" && !g.halftime
+            o.put("nba", JSONObject().put("period", nbaPeriod(g.period))
+                .put("clock", if (g.state == "final" || (g.state == "live" && g.halftime)) "0:00" else if (on) g.clock else "")
+                .put("remaining", if (playing) Math.round(nbaRemaining(g.period, g.clockSecs) * 1000.0) / 1000.0 else 0.0)
+                .put("halftime", g.state == "live" && g.halftime))
+        }
         return o
     }
 }

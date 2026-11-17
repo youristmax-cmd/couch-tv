@@ -258,24 +258,63 @@ class Server(private val ctx: Context, port: Int) : NanoWSD(port) {
         }
     }
 
+    private val linkTurn = java.util.concurrent.atomic.AtomicInteger()
+
     private fun launch(target: String): Response {
         if (target.isEmpty()) throw ApiError(400, "app is required")
         if ("://" in target || target.startsWith("intent:")) {
             // The app this link should open, when that is known: a known site's app (youtube.com), or
             // the app of a channel in the score bugs' table (a DirecTV channel link).
-            val pkg = (Apps.packageForLink(target) ?: Scores.packageForLink(target))?.takeIf { Tv.hasPackage(it) }
-            Tv.startUri(target, pkg)
-            if (pkg != null && Adb.connected) {
+            val site = Apps.packageForLink(target)?.takeIf { Tv.hasPackage(it) }
+            val channel = if (site == null) Scores.packageForLink(target)?.takeIf { Tv.hasPackage(it) } else null
+            val pkg = site ?: channel
+            // A channel link goes to the app's own first screen and nowhere else, which is how DirecTV
+            // takes one. An app that is not already in front sometimes ignores the link that brings
+            // it forward, from the background as well as from cold (LinkRules.kt): so then the same
+            // link is sent once more, a moment after the app is playing.
+            val screen = channel?.let { Tv.launcherComponent(it) }
+            val adb = Adb.connected
+            // Is the app already in front? ADB can see. Without it, all that is known is whether this
+            // app's own home is in front (the link came from a score bug, the TV app is behind it).
+            val appInFront = if (channel != null && adb) Tv.frontPackage() == channel else null
+            val again = channel != null && LinkRules.again(appInFront, HomeActivity.inFront)
+            // Without ADB "playing" is sound, and only a TV that was silent before the link can tell.
+            val soundBefore = again && !adb && Tv.musicActive()
+            val turn = linkTurn.incrementAndGet()      // a newer link takes over from one still waiting for its second send
+            // to that one screen; if the TV will not have that, to whichever screen of the app takes the link
+            val send = { try { Tv.startUri(target, pkg, component = screen) } catch (e: ApiError) { if (screen == null) throw e; Tv.startUri(target, pkg) } }
+            val sentAt = android.os.SystemClock.elapsedRealtime()
+            send()
+            // The second send is dropped when a newer link has been asked for, or somebody has come
+            // back to the home since the first.
+            val wanted = { linkTurn.get() == turn && HomeActivity.resumedAt < sentAt }
+            // Not held against the answer. Whether the channel then tunes, nothing here can see.
+            fun later(name: String, work: () -> Boolean) =
+                Thread({ runCatching { work() }.onFailure { Log.w(TAG, "the link's second send: ${it.message}") } }, name).apply { isDaemon = true }.start()
+            if (pkg != null && adb) {
                 // As for an app by name: it must really come to the front, or the caller is told.
                 // Any of the app's packages counts (a Fire TV has Amazon's YouTube beside Google's).
                 val got = Tv.waitForApp((Apps.BY_PACKAGE[pkg]?.pkgs ?: listOf(pkg)).toSet(), 8000)
                     ?: throw ApiError(504, "asked the TV to open that in ${Apps.describe(pkg)?.get("name") ?: pkg} but it did not come up")
+                // playing (or 25 s gone), 1.5 s more, and again if the app is still in front
+                if (again) later("link-again") {
+                    LinkRules.againWhenPlaying(playing = { Tv.sessionPlaying(pkg) }, wanted = wanted, inPlace = { Tv.frontPackage() == pkg }, send = { send() })
+                }
                 Now.push()
-                return json(200, ok().put("app", JSONObject(Apps.describe(got)!!)))
+                return json(200, ok().put("app", JSONObject(Apps.describe(got)!!)).put("again", again))
+            }
+            // No ADB to look with: the TV is listened to. The first sound, 1.5 s more, and again,
+            // if by then this app is no longer in front (so the link did bring something forward).
+            // Sound already playing, or none in 30 s: nothing to go by, the link stays sent once.
+            val listening = again && !soundBefore
+            if (listening) later("link-listen") {
+                LinkRules.againAfterSound(soundBefore = false, sounding = { Tv.musicActive() }, wanted = wanted, inPlace = { !App.inForeground }, send = { send() })
             }
             // A link nobody can name the app for, or no ADB to look with: as before, say what is in front.
             Thread.sleep(1500)
-            return json(200, ok().put("app", Apps.describe(Tv.frontPackage())?.let { JSONObject(it) } ?: JSONObject.NULL))
+            val answer = ok().put("app", Apps.describe(Tv.frontPackage())?.let { JSONObject(it) } ?: JSONObject.NULL)
+            if (channel != null) answer.put("listening", listening)
+            return json(200, answer)
         }
         if (target == "settings" && FireHome.isFireTv) {
             Tv.openSettings()
@@ -564,7 +603,9 @@ class Server(private val ctx: Context, port: Int) : NanoWSD(port) {
      */
     private fun scoreLogo(file: String): Response {
         val f = Scores.logoFile(file) ?: return json(404, err("no such logo"))
-        return newFixedLengthResponse(Response.Status.OK, "image/svg+xml", java.io.FileInputStream(f), f.length()).apply {
+        // MLB's are drawings (SVG), ESPN's are PNG: the app checked which when it kept the file
+        val type = if (file.endsWith(".png")) "image/png" else "image/svg+xml"
+        return newFixedLengthResponse(Response.Status.OK, type, java.io.FileInputStream(f), f.length()).apply {
             addHeader("Cache-Control", "max-age=604800")
             addHeader("X-Content-Type-Options", "nosniff")
             addHeader("Content-Security-Policy", "sandbox; default-src 'none'; style-src 'unsafe-inline'")

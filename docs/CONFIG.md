@@ -169,10 +169,11 @@ setup page (`http://<tv address>:5400/setup`, **Score bugs**) or with `POST /api
 ```json
 "home": {
   "scores": {
-    "teams": [ { "league": "mlb", "team": "LAD" } ],
+    "teams": [ { "league": "mlb", "team": "LAD" }, { "league": "nba", "team": "LAC" } ],
     "channels": {
       "SportsNet LA": { "number": 690, "link": "", "aliases": ["SNLA", "Spectrum SportsNet LA"], "app": "" },
-      "FOX": { "number": 11, "link": "" }
+      "FOX": { "number": 11, "link": "" },
+      "KTLA": { "number": 5, "link": "" }
     },
     "tv_app": "com.att.tv"
   }
@@ -181,8 +182,8 @@ setup page (`http://<tv address>:5400/setup`, **Score bugs**) or with `POST /api
 
 | Key | What it does |
 |---|---|
-| `teams` [`[{"league": "mlb", "team": "LAD"}, {"league": "nba", "team": "LAC"}]`] | Whose games show, up to 8: a league and the team's abbreviation as the league writes it. Only `mlb` has a feed; a team in another league shows nothing (SCORES.md says why there is no NBA). Adding a team is only this. |
-| `channels` [none] | Which channel each network is on your TV service. The key is the network's name as the league's feed writes it. `number` [0]: the channel number, shown on the bug. `link` [""]: a link that opens your TV app on that channel. `aliases` [none]: other names for the same network. `app` [""]: an Android package to open instead of the TV app, for a game only on a streaming service. Names are matched without capitals, spaces or punctuation. |
+| `teams` [`[{"league": "mlb", "team": "LAD"}, {"league": "nba", "team": "LAC"}]`] | Whose games show, up to 8: a league (`mlb` or `nba`) and the team's abbreviation as the feed writes it (the NBA's in ESPN's forms: `GS`, `NY`, `SA`, `NO`, `UTAH`, `WSH`). MLB's scores are MLB's own; the NBA's come from ESPN's public scoreboard, which is not an official feed (SCORES.md says what that means). A team in any other league shows nothing. Adding a team is only this. |
+| `channels` [none] | Which channel each network is on your TV service. The key is the network's name as the feed writes it (SCORES.md lists the names seen for the Dodgers and the Clippers). `number` [0]: the channel number, shown on the bug. `link` [""]: a link that opens your TV app on that channel. `aliases` [none]: other names for the same network. `app` [""]: an Android package to open instead of the TV app, for a game only on a streaming service. Names are matched without capitals, spaces or punctuation. |
 | `tv_app` [`com.att.tv`, DirecTV on a Fire TV] | The Android package of your TV service's app, opened when the game's channel has no `link` (or no channel matched). |
 
 ## Apps on the home

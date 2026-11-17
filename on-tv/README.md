@@ -30,7 +30,7 @@ home button unless you switch that on.
 | Picture mode, screens, Moonlight | yes | no | |
 | Home screen (TV home page) | yes | yes, optional | Same page, served from the app. Replacing Google's home needs one ADB command, see below. |
 | Live updates (`/api/events`) | yes | yes | Server-sent events, plus a WebSocket at `/api/ws`. |
-| Game-day score bugs | no | yes, MLB | On the landscape home while your team plays. See "Score bugs" below. |
+| Game-day score bugs | no | yes, MLB and NBA | On the landscape home while your team plays. See "Score bugs" below. |
 
 ## Which TVs
 
@@ -183,15 +183,18 @@ address.
 ## Score bugs (optional)
 
 While one of your teams is playing, the landscape home shows a small score bug at the top left
-(teams, score, inning, bases and outs), from 60 minutes before the start until 15 minutes after the
-end. OK on it opens your TV service's app for the game. **MLB only**: the scores come from MLB's
-own Stats API, which needs no key; the NBA's scoreboard refused a plain request when this was
-built, so there is no NBA. [docs/SCORES.md](../docs/SCORES.md) has all of it.
+(teams and score; inning, bases and outs for baseball; quarter and clock for basketball), from 60
+minutes before the start until 15 minutes after the end. OK on it opens your TV service's app for
+the game. **MLB and the NBA.** MLB's scores come from MLB's own Stats API, which needs no key. The
+NBA's own scoreboard refuses a plain request, so the NBA's come from ESPN's public scoreboard
+JSON: no key either, but not an official feed, with no permission given for this use, and ESPN
+may change or close it. [docs/SCORES.md](../docs/SCORES.md) has all of it.
 
 The teams, and which channel each network is on your TV service, are set on the phone's setup page
-(`http://<tv-ip>:5400/setup`, **Score bugs**). Left alone, the team is the Dodgers. The app looks
-at the team's schedule every 15 minutes (about a kilobyte) and asks for more only while a game is
-near and the home screen is in front. To switch it off, save an empty team list
+(`http://<tv-ip>:5400/setup`, **Score bugs**). Left alone, the teams are the Dodgers and the
+Clippers. Every 15 minutes the app looks at each team's schedule (about a kilobyte from MLB, 21 KB
+from ESPN) and asks for more only while a game is near and the home screen is in front. To leave
+ESPN out, take the NBA team out of the list; to switch it all off, save an empty list
 (`"teams": []`).
 
 ## Power on
@@ -242,10 +245,16 @@ out every computer, so reconnect yours afterwards).
 - `Finder.kt` and `Apps.kt`: the computer bridge's JustWatch lookup, app table and deep-link rules.
 - `web/shim.js`: added to the phone remote's page by the TV app. It pairs the phone and adds the
   token to every call, so the remote itself is unchanged and the same build works with both modes.
-- `Scores.kt` and `ScoreFeeds.kt`: the score bugs. `Scores.kt` asks MLB's Stats API and keeps the
-  time (the 15 minute schedule look, readings only while the home asks, the logo cache);
+- `Scores.kt` and `ScoreFeeds.kt`: the score bugs. `Scores.kt` asks MLB's Stats API and ESPN's
+  scoreboard (one `League` each) and keeps the time (the 15 minute look, readings only while the
+  home asks, the logo cache);
   `ScoreFeeds.kt` is every rule about what an answer means (which games show and in what order,
   the channel for a game), with no network and no Android in it, so it is tested on a computer.
+- `LinkRules.kt`: how a channel link is sent to a TV app (`/api/launch`): once when the app is
+  already in front; otherwise once more a moment after it is playing, because an app brought
+  forward by a link sometimes ignores it. With ADB it looks at the front app and the app's media
+  session; without ADB it goes by its own home being in front and by sound starting on the TV.
+  Also tested on a computer.
 - `web/setup.html`: the phone setup page (ADB, wireless debugging pairing, names, weather, ask,
   score bugs).
 - Endpoints are those in `bridge/API.md`, plus `/api/pair`, `/api/pair/start`, `/api/adb`,
@@ -259,4 +268,5 @@ with the real "Allow debugging?" dialog, keys, launch, deep link, volume, power,
 
 `tv-home/android/gradlew -p on-tv/android :app:testReleaseUnitTest` (from the repo folder, with
 the same JDK and Android SDK as a build) runs the score bugs' rules on the computer, with no TV and
-no emulator, against answers recorded from MLB's Stats API (`android/app/src/test/`).
+no emulator, against answers recorded from MLB's Stats API and from ESPN's scoreboard
+(`android/app/src/test/`).

@@ -10,12 +10,14 @@
   "ask_enabled": false,
   "ask_key": "",
   "scores": {
-    "_note": "Game-day score bugs (docs/SCORES.md). MLB only for now. A channel's number and link are yours to fill in; 0 and \"\" mean not filled in.",
-    "teams": [ { "league": "mlb", "team": "LAD" } ],
+    "_note": "Game-day score bugs (docs/SCORES.md). MLB from MLB's own feed; the NBA from ESPN's public scoreboard, which is not an official feed (leave the nba team out if you would rather not). A channel's number and link are yours to fill in; 0 and \"\" mean not filled in.",
+    "teams": [ { "league": "mlb", "team": "LAD" }, { "league": "nba", "team": "LAC" } ],
     "channels": {
       "SportsNet LA": { "number": 0, "link": "", "aliases": ["SNLA", "Spectrum SportsNet LA"], "app": "" },
       "FOX": { "number": 0, "link": "" },
-      "Apple TV": { "app": "" }
+      "Apple TV": { "app": "" },
+      "KTLA": { "number": 0, "link": "" },
+      "ClipperVision": { "app": "" }
     },
     "tv_app": "com.att.tv"
   }

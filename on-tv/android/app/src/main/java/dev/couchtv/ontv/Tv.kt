@@ -153,21 +153,46 @@ object Tv {
      * Opens a link: an intent:// URI from JustWatch, an app scheme, or https. cold restarts the app
      * first (needs ADB). Falls back to a plain Android intent without ADB.
      */
-    fun startUri(uriIn: String, pkg: String? = null, cold: Boolean = false): String {
+    fun startUri(uriIn: String, pkg: String? = null, cold: Boolean = false, component: String? = null): String {
         var uri = uriIn.replace("'", "")
         // JustWatch sometimes names an inner screen that newer app versions no longer have.
         uri = Regex("component=([^/;]+)/[^;]+").replace(uri) { "package=${it.groupValues[1]}" }
+        // component ("package/class"): the link goes to that one screen of the app and nowhere else
+        // (a DirecTV channel link is taken by its first screen). Only names made of plain characters.
+        val comp = component?.takeIf { Regex("[A-Za-z0-9_.$]+/[A-Za-z0-9_.$]+").matches(it) }
         if (Adb.connected) {
             val s = if (cold) "-S " else ""
             val out = if (uri.startsWith("intent:")) Adb.shell("am start -W $s'$uri'", 25_000)
-            else Adb.shell("am start -W $s-a android.intent.action.VIEW -d '$uri'" + (pkg?.let { " -p $it" } ?: ""), 25_000)
+            else Adb.shell("am start -W $s-a android.intent.action.VIEW -d '$uri'" +
+                (if (comp != null) " -n '$comp'" else pkg?.let { " -p $it" } ?: ""), 25_000)
             if (out.contains("Error")) throw ApiError(502, out.trim().lines().last().take(160))
             return "adb"
         }
         val i = if (uri.startsWith("intent:")) Intent.parseUri(uri, Intent.URI_INTENT_SCHEME)
-        else Intent(Intent.ACTION_VIEW, android.net.Uri.parse(uri)).apply { pkg?.let { setPackage(it) } }
+        else Intent(Intent.ACTION_VIEW, android.net.Uri.parse(uri)).apply {
+            if (comp != null) setComponent(android.content.ComponentName.unflattenFromString(comp)) else pkg?.let { setPackage(it) }
+        }
         start(i)
         return "intent"
+    }
+
+    /** The screen an app starts with (its TV launcher entry), as "package/class". Null when it has none. */
+    fun launcherComponent(pkg: String): String? {
+        val pm = ctx.packageManager
+        val c = (pm.getLeanbackLaunchIntentForPackage(pkg) ?: pm.getLaunchIntentForPackage(pkg))?.component ?: return null
+        return "${c.packageName}/${c.className}"
+    }
+
+    /**
+     * Is any media sound playing on the TV right now, whichever app's? Needs nothing: Android tells
+     * any app this much (AudioManager.isMusicActive). Not which app, and not what.
+     */
+    fun musicActive(): Boolean = runCatching { audio.isMusicActive }.getOrDefault(false)
+
+    /** Does the app's own media session say it is playing (dumpsys media_session)? Needs ADB; false without it. */
+    fun sessionPlaying(pkg: String): Boolean {
+        if (!Adb.connected) return false
+        return try { LinkRules.playing(Adb.shell("dumpsys media_session", 10_000), pkg) } catch (e: Exception) { false }
     }
 
     private fun start(i: Intent) {

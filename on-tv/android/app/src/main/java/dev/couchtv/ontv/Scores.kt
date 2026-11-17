@@ -27,9 +27,21 @@ import java.util.concurrent.locks.ReentrantLock
  *  - the logos, once each, from MLB's own addresses into this app's cache folder. They are never
  *    part of the app or the repository.
  *
- * NBA: not here. In November 2026 the NBA's scoreboard file (cdn.nba.com) answered a plain request
- * without a key with 403 Access Denied, so nothing is built on it and no other feed stands in for
- * it. A team set to "nba" shows no game, and the answer says why in "problem". docs/SCORES.md.
+ * NBA: ESPN's public scoreboard JSON (site.api.espn.com), which needs no key. It is not the NBA's
+ * own feed (cdn.nba.com answers a plain request with 403 Access Denied) and it is not an official
+ * or documented one: no permission for this use has been given or asked for, and ESPN may change
+ * or close it. The owner chose it knowing that (docs/SCORES.md). It is asked plainly, as this app,
+ * and if it ever refuses a plain request that is the end of it. What is asked, and how often:
+ *  - the team's entry, by its abbreviation, every 15 minutes, always (21 KB, 2.6 KB on the wire):
+ *    its id and its next game. That entry names a game only until about tip-off, then the one
+ *    after, so a game learned from it is remembered (also across a restart) and then followed by
+ *    its own id.
+ *  - one game (14 to 25 KB, 2.4 to 3.6 KB on the wire): every 60 s before the game and every 15 s
+ *    during it while the home asks, as for MLB; and once with each 15 minute look from 60 minutes
+ *    before the start until 30 minutes after the end, as the team's entry no longer has it.
+ *  - where the league's logo is: one small scoreboard answer (17 KB), once a week.
+ *  - the logos, once each, from the addresses ESPN's answers give, at 200 px (league 100 px)
+ *    through ESPN's own resizer, into the cache folder. PNG.
  *
  * Another league later is one more League below (where its games, one game's newer reading and its
  * logos come from) and its rules in ScoreFeeds.kt. The timing, the window, the channels, the logo
@@ -53,23 +65,29 @@ object Scores {
 
     // ---------------------------------------------------------------- the leagues
 
-    /** The games a league's feed has for one team. games is null when the feed did not answer; note says what is wrong with the team. */
-    private class Found(val games: List<ScoreFeeds.Game>?, val note: String? = null)
+    /**
+     * The games a league's feed has for one team. games is null when the feed did not answer at
+     * all; failed says something did not come (the games that did are still used); note says what
+     * is wrong with the team.
+     */
+    private class Found(val games: List<ScoreFeeds.Game>?, val note: String? = null, val failed: Boolean = games == null)
 
     private interface League {
-        /** The team's games for yesterday, today and tomorrow. */
+        /** "svg" or "png": what this league's logos are, and so how they are checked, named and served. */
+        val logoExt: String
+        /** The team's games near now (played lately, on now, next). */
         fun games(team: String, t: Long): Found
         /** A newer reading of one game from its own feed, or null when the feed did not answer. quick: give up sooner. */
         fun reading(g: ScoreFeeds.Game, quick: Boolean): ScoreFeeds.Game?
-        /** Where the league keeps its own picture for "league" or for a team id, drawn for a dark background. */
-        fun logoUrl(what: String): String
+        /**
+         * Where the picture for "league" or for a team id is, drawn for a dark background when
+         * there is such a one. Null when that is not known (yet). It may ask the feed, so it is
+         * only called from the logo fetcher's own thread.
+         */
+        fun logoUrl(what: String): String?
     }
 
-    private val leagues: Map<String, League> = mapOf("mlb" to Mlb)
-
-    /** A league somebody will ask for that is not here, and why, in plain words (it goes to "problem"). */
-    private val notHere = mapOf(
-        "nba" to "NBA scores are not available: the NBA's scoreboard refuses a plain request without a key, so only MLB games show (docs/SCORES.md)")
+    private val leagues: Map<String, League> = mapOf("mlb" to Mlb, "nba" to Nba)
 
     private object Mlb : League {
         private const val API = "https://statsapi.mlb.com/api"
@@ -98,7 +116,8 @@ object Scores {
             return ScoreFeeds.mlbFeed(j, g)
         }
 
-        override fun logoUrl(what: String) = if (what == "league") "$LOGOS/league-on-dark/1.svg" else "$LOGOS/team-cap-on-dark/$what.svg"
+        override val logoExt = "svg"
+        override fun logoUrl(what: String): String? = if (what == "league") "$LOGOS/league-on-dark/1.svg" else "$LOGOS/team-cap-on-dark/$what.svg"
 
         @Volatile private var listFailed = false
 
@@ -114,6 +133,108 @@ object Scores {
                 if (j?.optJSONArray("teams") != null) { list = j.put("_at", now()); Store.writeJson("scores-mlb-teams.json", list) }
             } else listFailed = false
             return list?.let { ScoreFeeds.mlbTeamId(it, abbr) }?.also { ids[abbr] = it }
+        }
+    }
+
+    /**
+     * The NBA, from ESPN's public scoreboard JSON. Not an official feed: see the note at the top
+     * and docs/SCORES.md.
+     */
+    private object Nba : League {
+        private const val API = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba"
+        private const val KEPT = "scores-nba-following.json"   // [{"id", "team", "start", "done"}]
+        private const val LEAGUE = "scores-nba-league.json"    // {"href", "_at"}: where ESPN says the league's logo is
+        private const val WEEK_MS = 7 * 24 * 60 * 60_000L
+
+        /** A game learned from the team's entry: followed by its own id once that entry has moved on. */
+        private class Follow(val team: String, @Volatile var start: Long, @Volatile var doneAt: Long = 0)
+
+        private val following = ConcurrentHashMap<Long, Follow>()
+        private val logos = ConcurrentHashMap<Int, String>()    // team id to the logo address the feed gave
+        @Volatile private var loaded = false
+
+        override val logoExt = "png"
+
+        override fun games(team: String, t: Long): Found {
+            load()
+            val r = get("$API/teams/${team.lowercase()}")
+            val j = (if (r.status == 200) runCatching { JSONObject(r.body) }.getOrNull() else null)
+                ?: return Found(null).also { Log.w(TAG, "nba $team: HTTP ${r.status}") }
+            // ESPN answers {} for a team it does not have
+            val entry = ScoreFeeds.nbaTeam(j) ?: return Found(emptyList(), "ESPN has no NBA team called $team")
+            val out = ArrayList(entry.games)
+            var failed = false
+            var changed = false
+            for (g in entry.games) {
+                remember(g)
+                val f = following[g.pk]
+                if (f == null) { following[g.pk] = Follow(team, g.startMs); changed = true }
+                else if (f.start != g.startMs) { f.start = g.startMs; changed = true }      // moved to another time
+            }
+            for ((pk, f) in following) {
+                // The games the entry no longer names (ScoreFeeds.nbaFollow says what to do with each).
+                // "forget" goes for any team's: a team taken out of the settings leaves nothing behind.
+                val what = ScoreFeeds.nbaFollow(f.start, f.doneAt, t)
+                if (what == "forget") { following.remove(pk); changed = true; continue }
+                if (what == "wait" || f.team != team || out.any { it.pk == pk }) continue
+                val g = event(pk, entry.id, quick = false)
+                if (g == null) { failed = true; continue }
+                if (f.doneAt == 0L) ScoreFeeds.nbaDoneAt(g, t).takeIf { it > 0 }?.let { f.doneAt = it; changed = true }
+                out += g
+            }
+            if (changed) save()
+            return Found(out, failed = failed)
+        }
+
+        override fun reading(g: ScoreFeeds.Game, quick: Boolean): ScoreFeeds.Game? =
+            event(g.pk, if (g.ourSide == "home") g.homeId else g.awayId, quick)
+
+        /** One game by its own id, as a game of that team. Null when ESPN did not answer or the answer is not that game. */
+        private fun event(pk: Long, teamId: Int, quick: Boolean): ScoreFeeds.Game? {
+            val r = get("$API/scoreboard/$pk", if (quick) 1500 else 4000, if (quick) 2000 else 6000)
+            val g = (if (r.status == 200) runCatching { JSONObject(r.body) }.getOrNull() else null)
+                ?.let { ScoreFeeds.nbaEvent(it, teamId) }?.takeIf { it.pk == pk }
+            if (g == null) Log.w(TAG, "nba game $pk: HTTP ${r.status}") else remember(g)
+            return g
+        }
+
+        private fun remember(g: ScoreFeeds.Game) {
+            g.awayLogo?.let { logos[g.awayId] = it }
+            g.homeLogo?.let { logos[g.homeId] = it }
+        }
+
+        /**
+         * A team's logo: the address its last game's answer gave. The league's: the address in
+         * ESPN's scoreboard (asked for one game only, once a week). Both at a modest size through
+         * ESPN's own resizer, and only from espncdn.com (ScoreFeeds.espnLogo).
+         */
+        override fun logoUrl(what: String): String? {
+            if (what != "league") return ScoreFeeds.espnLogo(logos[what.toIntOrNull() ?: return null], 200)
+            var kept = Store.readJson(LEAGUE) as? JSONObject
+            if (kept == null || now() - kept.optLong("_at") > WEEK_MS) {
+                val r = get("$API/scoreboard?limit=1")
+                val href = (if (r.status == 200) runCatching { JSONObject(r.body) }.getOrNull() else null)
+                    ?.optJSONArray("leagues")?.optJSONObject(0)?.let { ScoreFeeds.espnLogoOf(it) }
+                if (href != null) { kept = JSONObject().put("href", href).put("_at", now()); Store.writeJson(LEAGUE, kept) }
+            }
+            return ScoreFeeds.espnLogo(kept?.optString("href"), 100)
+        }
+
+        /** The games being followed are kept in the app's files: a TV switched on in the middle of a game still knows which one. */
+        @Synchronized private fun load() {
+            if (loaded) return
+            loaded = true
+            val list = Store.readJson(KEPT) as? JSONArray ?: return
+            for (i in 0 until list.length()) {
+                val o = list.optJSONObject(i) ?: continue
+                if (o.optLong("id") > 0 && o.optString("team").isNotEmpty()) following[o.optLong("id")] = Follow(o.optString("team"), o.optLong("start"), o.optLong("done"))
+            }
+        }
+
+        private fun save() {
+            val list = JSONArray()
+            following.forEach { (pk, f) -> list.put(JSONObject().put("id", pk).put("team", f.team).put("start", f.start).put("done", f.doneAt)) }
+            Store.writeJson(KEPT, list)
         }
     }
 
@@ -306,12 +427,13 @@ object Scores {
             val name = team.optString("league")
             val league = leagues[name]
             if (league == null) {
-                notes += notHere[name] ?: "${name.uppercase()} scores are not available: only MLB has a feed here (docs/SCORES.md)"
+                notes += "${name.uppercase()} scores are not available: only MLB and the NBA have a feed here (docs/SCORES.md)"
                 continue
             }
             val f = league.games(team.optString("team"), t)
             f.note?.let { notes += it }
-            if (f.games == null) failed = true else f.games.forEach { found[it.id] = it }
+            if (f.failed) failed = true
+            f.games?.forEach { found[it.id] = it }
         }
         problem = notes.joinToString(". ").ifEmpty { null }
         if (failed) {
@@ -352,31 +474,35 @@ object Scores {
 
     private val logoJobs = Executors.newSingleThreadExecutor { r -> Thread(r, "scores-logos").apply { isDaemon = true } }
     private val logoTried = ConcurrentHashMap<String, Long>()
-    private val LOGO_FILE = Regex("([a-z]{2,6})-(league|[0-9]{1,12})\\.svg")
+    private val LOGO_FILE = Regex("([a-z]{2,6})-(league|[0-9]{1,12})\\.(svg|png)")
     private fun logoDir() = File(App.instance.cacheDir, "scores-logos").apply { mkdirs() }
 
     /**
      * The path the page puts in an <img> for a league's own mark ("league") or a team's (its id),
      * or null while the picture is not in the cache yet: it is fetched in the background and is
-     * there for a later answer. The answer itself never waits for a picture.
+     * there for a later answer. The answer itself never waits for a picture. MLB's are SVG, ESPN's
+     * PNG; the file's ending says which.
      */
     private fun logo(league: String, what: String): String? {
-        val file = "$league-$what.svg"
-        val from = leagues[league]?.takeIf { LOGO_FILE.matches(file) && what != "0" }?.logoUrl(what) ?: return null
+        val from = leagues[league] ?: return null
+        val file = "$league-$what.${from.logoExt}"
+        if (!LOGO_FILE.matches(file) || what == "0") return null
         val f = File(logoDir(), file)
         if (f.isFile && f.length() > 0) return "/api/scores/logo/$file"
         val t = now()
         if (t - (logoTried[file] ?: 0L) < 10 * 60_000L) return null   // asked for a moment ago: not again for 10 minutes
         logoTried[file] = t
         logoJobs.execute {
-            val r = get(from)
-            val text = r.body.trimStart()
-            // only a real, plain drawing is kept: never an error page, never one that carries a script
-            if (r.status != 200 || r.body.length !in 50..200_000 || !(text.startsWith("<svg") || text.startsWith("<?xml")) || text.contains("<script", ignoreCase = true)) {
-                Log.w(TAG, "logo $file: HTTP ${r.status}, ${r.body.length} bytes, not kept"); return@execute
+            val url = runCatching { from.logoUrl(what) }.getOrNull()
+            if (url == null) { Log.w(TAG, "logo $file: the feed has not said where it is"); return@execute }
+            val r = get(url)
+            // Only what it should be is kept (ScoreFeeds.picture): a plain drawing or a PNG of a
+            // sensible size, never an error page, never a drawing that carries a script.
+            if (r.status != 200 || !ScoreFeeds.picture(from.logoExt, r.bytes)) {
+                Log.w(TAG, "logo $file: HTTP ${r.status}, ${r.bytes.size} bytes, not kept"); return@execute
             }
             val tmp = File(logoDir(), "$file.tmp")
-            runCatching { tmp.writeText(r.body); if (!tmp.renameTo(f)) tmp.delete() }.onFailure { Log.w(TAG, "logo $file: ${it.message}") }
+            runCatching { tmp.writeBytes(r.bytes); if (!tmp.renameTo(f)) tmp.delete() }.onFailure { Log.w(TAG, "logo $file: ${it.message}") }
         }
         return null
     }
@@ -389,7 +515,10 @@ object Scores {
 
     // ---------------------------------------------------------------- transport
 
-    private class Reply(val status: Int, val body: String)
+    private class Reply(val status: Int, val bytes: ByteArray) {
+        val body: String get() = String(bytes, Charsets.UTF_8)
+    }
+    private val NOTHING = ByteArray(0)
 
     /** One GET with no key and no cookie. Status -1 when the feed could not be reached, -2 when the answer was too long. */
     private fun get(url: String, connectMs: Int = 4000, readMs: Int = 6000): Reply {
@@ -399,9 +528,9 @@ object Scores {
             c.instanceFollowRedirects = false
             c.setRequestProperty("User-Agent", AGENT)
             val st = c.responseCode
-            if (st != 200) return Reply(st, "")
-            // Nothing asked for here is big (a few KB at most), and a TV has little memory: reading
-            // stops at 256 KB, and an answer that long is not used.
+            if (st != 200) return Reply(st, NOTHING)
+            // Nothing asked for here is big (MLB's answers are a few KB, ESPN's 25 KB at most), and
+            // a TV has little memory: reading stops at 256 KB, and an answer that long is not used.
             val out = java.io.ByteArrayOutputStream()
             val buf = ByteArray(8192)
             c.inputStream.use { s ->
@@ -409,13 +538,13 @@ object Scores {
                     val n = s.read(buf)
                     if (n < 0) break
                     out.write(buf, 0, n)
-                    if (out.size() > MAX_BYTES) return Reply(-2, "")
+                    if (out.size() > MAX_BYTES) return Reply(-2, NOTHING)
                 }
             }
-            Reply(200, out.toString("UTF-8"))
+            Reply(200, out.toByteArray())
         } catch (e: Exception) {
             Log.w(TAG, "${url.substringBefore('?').substringAfterLast('/')}: ${e.javaClass.simpleName}")
-            Reply(-1, "")
+            Reply(-1, NOTHING)
         } finally { c.disconnect() }
     }
 }

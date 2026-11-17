@@ -233,6 +233,30 @@ name is: `504` when the app did not come to the front within 8 seconds. The chec
 TV; without it, and for any other link, the answer is as before (whatever is in front after a
 moment, never an error).
 
+A channel link from the table is sent to its app's own first screen. A TV app that is not already
+in front sometimes ignores the link that brings it forward, from the background as well as from a
+cold start (seen with DirecTV on a Fire TV; docs/SCORES.md, "Channel links"). The same link sent
+again once the app is playing tunes it. So a link to an app that is not in front is sent twice,
+the second time 1.5 s after the app is playing, after the answer has gone out:
+- With ADB on the TV: the answer carries `"again": true` when the app was not in front before the
+  send (`false`: it was, and the link is sent once). The second send follows the app's media
+  session saying it is playing (looked at every 2 s; after 25 s it is sent anyway), if the app is
+  still in front.
+- Without ADB the TV app cannot see which app is in front. A link sent while its own home is in
+  front (OK on a score bug) gets the second send; one sent while the home is not in front (from
+  the phone, over some other app) is sent once. "Playing" is sound: the answer carries
+  `"listening": true` when the second send is due and the TV was silent before the link; the TV
+  app then listens for media sound once a second, for 30 s at most, and sends again after the
+  first sound. `"listening": false`: the home was not in front, or something was already playing
+  on the TV (then there is nothing to go by). No sound in 30 s: nothing more either. As before,
+  `app` is `null` here when another app is in front.
+- Either way the second send is dropped when a newer link has been asked for, or the home has
+  come back to the front since the first.
+
+Nothing here can tell whether the channel then tuned: `200` means the link was sent (and, with
+ADB, that the app is in front), not that the link was a good one. In DirecTV's links only the id
+counts, not the call sign.
+
 ### `GET /api/find?title=bluey`
 Where a show or film streams in the home's country (`country` in `config.json`), without playing it. Optional `&type=tv|movie`.
 ```json
@@ -631,6 +655,8 @@ Every title object (find result, play, playing, continue, picks) carries `poster
 URLs. Credit "Data from JustWatch" somewhere quiet (their terms).
 
 ## Change notes
+- On-TV app: the score bugs' NBA games (`nba` in a game of `GET /api/scores`, PNG logos), from
+  ESPN's public scoreboard.
 - On-TV app: `GET /api/scores` and `GET /api/scores/logo/<file>` (game-day score bugs, MLB), and
   `scores` in its `GET|POST /api/settings`. Its `POST /api/launch` now checks that a link's app
   came to the front when it knows which app that is. All described at the end of this file.
@@ -678,8 +704,9 @@ removes them; `GET /api/spotify` says whether it is set up.
 
 ### Score bugs: `GET /api/scores` (on-TV app only)
 The configured teams' games that are on screen right now, for the home's score bugs
-(docs/SCORES.md): already filtered, ordered and in one shape. MLB only; a team in a league with no
-feed (the NBA) gives no game and a sentence in `problem`.
+(docs/SCORES.md): already filtered, ordered and in one shape. MLB (from MLB's own feed) and the
+NBA (from ESPN's public scoreboard, which is not an official feed: docs/SCORES.md). A team in any
+other league gives no game and a sentence in `problem`.
 ```json
 {"ok": true, "tv_app": "com.att.tv", "problem": null,
  "games": [
@@ -689,7 +716,14 @@ feed (the NBA) gives no game and a sentence in `problem`.
    "home": {"abbr": "SF", "score": 1, "logo": null},
    "broadcasts": ["SportsNet LA", "NBCS BA"],
    "channel": {"name": "SportsNet LA", "number": 690, "link": "", "app": null},
-   "mlb": {"inning": 10, "half": "top", "outs": 2, "first": true, "second": true, "third": false}}
+   "mlb": {"inning": 10, "half": "top", "outs": 2, "first": true, "second": true, "third": false}},
+  {"id": "nba-401910006", "league": "nba", "league_name": "NBA", "league_logo": "/api/scores/logo/nba-league.png",
+   "state": "live", "status": "In Progress", "status_detail": "4:53 - 2nd Quarter", "start": "2026-11-18T03:30:00Z",
+   "away": {"abbr": "UTAH", "score": 45, "logo": "/api/scores/logo/nba-26.png"},
+   "home": {"abbr": "LAC", "score": 48, "logo": "/api/scores/logo/nba-12.png"},
+   "broadcasts": ["ClipperVision", "KJZZ-TV", "Jazz+"],
+   "channel": null,
+   "nba": {"period": "2ND", "clock": "4:53", "remaining": 0.407, "halftime": false}}
  ]}
 ```
 - `games`: two at most, in this order: being played, delayed, about to start, final. An empty
@@ -701,32 +735,42 @@ feed (the NBA) gives no game and a sentence in `problem`.
 - `id`: the league and the feed's own game id, the same for the whole game. A postponed or
   cancelled game ends in `-off` (`mlb-823523-off`), because MLB gives the game played later the
   same id.
-- `state`: `pre`, `live`, `final` or `delayed`. `delayed` covers a rain delay (the score and the
-  `mlb` detail stay), a delayed start, and a game that is postponed, cancelled or suspended (scores
-  `null`).
-- `status`: the feed's own word, cut at any colon so it fits the bug: `Scheduled`, `Pre-Game`,
-  `Warmup`, `In Progress`, `Delayed`, `Delayed Start`, `Postponed`, `Cancelled`, `Suspended`,
-  `Final`, `Game Over`, `Completed Early`. `status_detail`: all of it, with the reason when the
-  feed gives one (`Delayed: Rain`, `Postponed: Inclement Weather`).
+- `state`: `pre`, `live`, `final` or `delayed`. `delayed` covers a delay part-way (the score and
+  the `mlb` or `nba` detail stay), a delayed start, and a game that is postponed, cancelled or
+  suspended (scores `null`).
+- `status`: the feed's own word. MLB's, cut at any colon so it fits the bug: `Scheduled`,
+  `Pre-Game`, `Warmup`, `In Progress`, `Delayed`, `Delayed Start`, `Postponed`, `Cancelled`,
+  `Suspended`, `Final`, `Game Over`, `Completed Early`. ESPN's for the NBA: `Scheduled`,
+  `In Progress`, `End of Period`, `Halftime`, `Final`, `Postponed`, `Canceled`. `status_detail`:
+  all of it (`Delayed: Rain`, `Postponed: Inclement Weather`; for the NBA `4:53 - 2nd Quarter`,
+  `End of 3rd Quarter`, `Final/OT`).
 - `start`: the scheduled start, ISO 8601, always UTC.
-- `away`, `home`: `abbr` as the league writes it (MLB: `AZ`, `ATH`, `CWS`, `KC`, `SD`, `SF`, `TB`,
-  `WSH`...); `score` is `null` until the game is being played; `logo` is a path on this server, or
-  `null` while the app has not fetched that logo yet (it is there a moment later) or cannot.
-- `broadcasts`: the TV broadcasts' names as the feed gives them, the most useful to this household
-  first (the team's own channel, then national ones).
+- `away`, `home`: `abbr` as the feed writes it (MLB: `AZ`, `ATH`, `CWS`, `KC`, `SD`, `SF`, `TB`,
+  `WSH`...; the NBA in ESPN's forms: `GS`, `NY`, `SA`, `NO`, `UTAH`, `WSH`...); `score` is `null`
+  until the game is being played; `logo` is a path on this server, or `null` while the app has not
+  fetched that logo yet (it is there a moment later) or cannot. MLB's logos are SVG, the NBA's PNG.
+- `broadcasts`: the broadcasts' names as the feed gives them (TV for MLB; TV and streaming
+  services for the NBA), the most useful to this household first (the team's own, then national
+  ones).
 - `channel`: the entry of `home.scores.channels` that matches one of the broadcasts, or `null`.
   `number` is `0` and `link` is `""` when not filled in; `app` is an Android package when the
   entry has one (a game only on a streaming service), else `null`. To open the game:
   `POST /api/launch` with `{"app": link}`, else `{"app": channel.app}`, else `{"app": tv_app}`.
-- `final_label`: only when `state` is `final`: `FINAL`, or `F/10` when the game did not end in its
-  scheduled inning.
-- `mlb`: `inning`, `half` (`top` or `bottom`), `outs` (0 to 3; 3 shows between halves), and
-  `first`, `second`, `third` (a runner on that base). Outs and runners are 0 and `false` unless the
-  game is being played or stopped part-way.
+- `final_label`: only when `state` is `final`: `FINAL`; for MLB `F/10` when the game did not end
+  in its scheduled inning; for the NBA `F/OT`, `F/2OT`... after overtime.
+- `mlb` (MLB games only, always there): `inning`, `half` (`top` or `bottom`), `outs` (0 to 3; 3
+  shows between halves), and `first`, `second`, `third` (a runner on that base). Outs and runners
+  are 0 and `false` unless the game is being played or stopped part-way.
+- `nba` (NBA games only, always there): `period` (`1ST`, `2ND`, `3RD`, `4TH`, `OT`, `2OT`...; `""`
+  before the game and for one that is off), `clock` as the feed writes it (`4:53`; tenths inside
+  the last minute, `45.3`; `0:00` at the end of a period, at halftime and after the game; `""`
+  before it), `remaining` (how much of the period is left, 0 to 1: a quarter is 12:00, an overtime
+  5:00; 0 whenever no period is being played) and `halftime`. The end of a quarter is `live` with
+  `clock` `0:00` and `status` `End of Period`.
 
 The feeds are only asked while this is being called: the app reads the game every 15 s (60 s
-before it starts) as long as there was a call in the last 90 s, and looks at the schedule every
-15 minutes regardless. A call that finds its reading old reads again first (it gives up after a
+before it starts) as long as there was a call in the last 90 s, and looks at the schedule (MLB) or
+the team's entry (NBA) every 15 minutes regardless. A call that finds its reading old reads again first (it gives up after a
 few seconds and answers with what it has). When
 the app has a game to show and the last answer it gave was an empty list (a game came into its
 window, or came back after its feed failed), it calls `window.scores.wake()` in the home page, so
@@ -735,11 +779,14 @@ the page asks again by itself on `tv.resume`. If the feed stops answering, a gam
 reading for 2 minutes and is then left out until a reading works (the schedule look, at the
 latest).
 
-`GET /api/scores/logo/<file>`: a team's or league's logo (`image/svg+xml`) from the app's cache,
-where it was put the first time it was needed, from the league's own address. No token (an
-`<img>` cannot send one). `Cache-Control: max-age=604800`. `404` for anything not in the cache.
+`GET /api/scores/logo/<file>`: a team's or league's logo from the app's cache, where it was put
+the first time it was needed: `mlb-<team id>.svg` and `mlb-league.svg` (`image/svg+xml`, from
+MLB's own address), `nba-<ESPN team id>.png` and `nba-league.png` (`image/png`, 200 px and 100 px,
+from the address ESPN's answer gave). No token (an `<img>` cannot send one).
+`Cache-Control: max-age=604800`. `404` for anything not in the cache.
 
 The settings are `scores` in the on-TV app's `GET|POST /api/settings`:
-`{"scores": {"teams": [{"league": "mlb", "team": "LAD"}], "channels": {"SportsNet LA": {"number":
+`{"scores": {"teams": [{"league": "mlb", "team": "LAD"}, {"league": "nba", "team": "LAC"}],
+"channels": {"SportsNet LA": {"number":
 690, "link": "", "aliases": ["SNLA"], "app": ""}}, "tv_app": "com.att.tv"}}` (also accepted as
 `{"home": {"scores": {...}}}`). Only the keys sent are changed; `400` for a wrong shape.

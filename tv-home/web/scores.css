@@ -12,13 +12,17 @@
 /* the stack: the Spotify card's own corner (.np). While that card shows small (html.np-small, set by
    nowplaying.js) the stack sits 16 px under it, and slides between the two places. It is over the
    app bar and under the top of the screen (the list of people opens over it) and under the card,
-   which passes in front of it on its way to the middle. */
+   which passes in front of it on its way to the middle.
+   Everything in it is drawn at nine tenths of the design's size (--sb-size), from the top left
+   corner, so a bug is 396 x 205 on the screen and keeps the card's left edge. The measurements
+   further down are the design's own, before that. */
 .sbs {
+  --sb-size: 0.9;
   position: fixed; z-index: 1; left: 4rem; top: var(--np-top, 4rem); width: 27.5rem; height: 0;
-  pointer-events: none; transform: translateY(0);
+  pointer-events: none; transform-origin: 0 0; transform: translateY(0) scale(var(--sb-size));
   transition: transform 500ms cubic-bezier(0.32, 1.2, 0.36, 1);
 }
-.np-small .sbs { transform: translateY(14.8125rem); }   /* the card's 221 px and 16 px of air */
+.np-small .sbs { transform: translateY(14.8125rem) scale(var(--sb-size)); }   /* the card's 221 px and 16 px of air */
 .sbs.gone { display: none; }
 .sbs > svg { position: absolute; width: 0; height: 0; }
 
