@@ -1,0 +1,186 @@
+/* The Spotify "now playing" card of the solar home (nowplaying.js). Sizes are the design's at 1080p:
+   1rem = 16 device pixels on a 1920x1080 TV. Small: 440 x 221 at the top left. Large: 860 x 414 in
+   the middle, where the big clock is, which steps aside while it shows. */
+
+/* the box: only its place and size (the card inside carries the glass and every transform) */
+.np {
+  position: fixed; z-index: 3; left: 4rem; top: var(--np-top, 4rem); width: 27.5rem; height: 13.8125rem;
+  pointer-events: none; transform-origin: 0 0;
+  transition: left 750ms cubic-bezier(0.32, 1.2, 0.36, 1), top 750ms cubic-bezier(0.32, 1.2, 0.36, 1),
+    width 750ms cubic-bezier(0.32, 1.2, 0.36, 1), height 750ms cubic-bezier(0.32, 1.2, 0.36, 1);
+}
+.np.large { left: calc(50% - 26.875rem); top: 9.375rem; width: 53.75rem; height: 25.875rem; }
+.np.gone { display: none; }
+
+/* the glass */
+.np-card {
+  position: absolute; top: 0; right: 0; bottom: 0; left: 0; border-radius: 2.25rem; overflow: hidden; color: #fff;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.05) 45%, rgba(255, 255, 255, 0.10)), rgba(14, 22, 30, 0.38);
+  -webkit-backdrop-filter: blur(2.5rem) saturate(1.8) brightness(1.05); backdrop-filter: blur(2.5rem) saturate(1.8) brightness(1.05);
+  box-shadow: inset 0 0 0 0.09375rem rgba(255, 255, 255, 0.26), inset 0.125rem 0.125rem 0 -0.03125rem rgba(255, 255, 255, 0.65),
+    inset -0.09375rem -0.09375rem 0 -0.03125rem rgba(255, 255, 255, 0.2), inset 0 -1rem 1.75rem -1rem rgba(0, 0, 0, 0.26),
+    inset 0 1rem 1.75rem -1.125rem rgba(255, 255, 255, 0.38), 0 1.5rem 4rem rgba(0, 0, 0, 0.3);
+  transition: transform 350ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 400ms ease, box-shadow 300ms ease,
+    border-radius 750ms cubic-bezier(0.32, 1.2, 0.36, 1);
+}
+.np.large .np-card { border-radius: 3rem; }
+/* the sheen at the top left */
+.np-sheen {
+  position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; mix-blend-mode: screen;
+  background: radial-gradient(120% 90% at 10% 0%, rgba(255, 255, 255, 0.30), rgba(255, 255, 255, 0.07) 32%, rgba(255, 255, 255, 0) 58%);
+}
+/* no backdrop blur (unsupported, or home.bar_blur false, as for the app bar): a plainer, darker glass */
+.no-blur .np-card {
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.05) 45%, rgba(255, 255, 255, 0.10)), rgba(14, 22, 30, 0.74);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .np-card { background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.05) 45%, rgba(255, 255, 255, 0.10)), rgba(14, 22, 30, 0.74); }
+}
+
+/* A. pop in: from a little above, small and clear, with a slight overshoot */
+.np.off .np-card { opacity: 0; transform: translateY(-1.75rem) scale(0.8); }
+.np.entering .np-card { transition: opacity 400ms ease, transform 650ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+/* leaving after a long pause: back up the way it came, quicker */
+.np.leaving .np-card { opacity: 0; transform: translateY(-0.75rem) scale(0.92); transition: opacity 350ms ease-in, transform 350ms ease-in; }
+/* C. held to stop: it shrinks away */
+.np.stopped .np-card { opacity: 0; transform: scale(0.84); transition: opacity 450ms ease-in, transform 450ms ease-in; }
+
+/* the whole card selected: no ring. It lifts, its rim brightens a little and its shadow deepens. */
+.np.sel .np-card {
+  transform: scale(1.03);
+  box-shadow: inset 0 0 0 0.09375rem rgba(255, 255, 255, 0.38), inset 0.125rem 0.125rem 0 -0.03125rem rgba(255, 255, 255, 0.85),
+    inset -0.09375rem -0.09375rem 0 -0.03125rem rgba(255, 255, 255, 0.3), inset 0 -1rem 1.75rem -1rem rgba(0, 0, 0, 0.26),
+    inset 0 1rem 1.75rem -1.125rem rgba(255, 255, 255, 0.46), 0 2.5rem 5.625rem rgba(0, 0, 0, 0.55);
+}
+.np.holding .np-card { transform: scale(0.965); transition: transform 200ms ease-out, box-shadow 300ms ease; }
+
+/* the album art: one picture that moves and grows between the two sizes */
+.np-art {
+  position: absolute; z-index: 2; left: 1rem; top: 1rem; width: 5.75rem; height: 5.75rem; border-radius: 1.25rem; overflow: hidden;
+  background: rgba(255, 255, 255, 0.14); transform-origin: 0 0;
+  transition: left 750ms cubic-bezier(0.32, 1.2, 0.36, 1), top 750ms cubic-bezier(0.32, 1.2, 0.36, 1),
+    width 750ms cubic-bezier(0.32, 1.2, 0.36, 1), height 750ms cubic-bezier(0.32, 1.2, 0.36, 1), border-radius 750ms cubic-bezier(0.32, 1.2, 0.36, 1);
+}
+.np.large .np-art { left: 1.75rem; top: 6.625rem; width: 17.5rem; height: 17.5rem; border-radius: 1.375rem; }
+.np-art img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* "OK opens Spotify", on the art while the card is selected (two lines on the small art) */
+.np-tip {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: 96%; padding: 0.375rem 0.5rem; border-radius: 0.875rem;
+  background: rgba(8, 12, 18, 0.8); color: #fff; font-size: 0.875rem; line-height: 1.0625rem; font-weight: 600; text-align: center; white-space: nowrap;
+  opacity: 0; transition: opacity 200ms ease;
+}
+.np-tip b { display: block; font-weight: inherit; }
+.np.large .np-tip { top: auto; bottom: 1rem; transform: translateX(-50%); padding: 0.5rem 1.125rem; border-radius: 1.5rem; font-size: 1.25rem; line-height: 1.625rem; }
+.np.large .np-tip b { display: inline; }
+.np.sel .np-tip, .np.note .np-tip { opacity: 1; }
+.np.note .np-tip { white-space: normal; }
+
+/* the two layouts, each at its own size from the card's top left corner. B: the one going fades in
+   0.18 s, the one coming fades in over 0.35 s once the card is most of the way there. */
+.np-s, .np-l { position: absolute; z-index: 1; top: 0; left: 0; opacity: 0; transition: opacity 180ms ease; }
+.np-s { width: 27.5rem; height: 13.8125rem; }
+.np-l { width: 53.75rem; height: 25.875rem; }
+.np.small .np-s, .np.large .np-l { opacity: 1; transition: opacity 350ms ease 300ms; }
+
+.np-title, .np-artist { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* a title that does not fit slides along (nowplaying.js slide()): no dots while it moves */
+.np-title.run { text-overflow: clip; }
+.np-title.run span { display: inline-block; will-change: transform; }
+.np-title { font-weight: 600; color: #fff; letter-spacing: -0.01em; }
+.np-artist { color: rgba(255, 255, 255, 0.88); }
+.np-bar { border-radius: 1rem; overflow: hidden; background: rgba(255, 255, 255, 0.24); }
+.np-bar i { display: block; height: 100%; background: #fff; transform-origin: 0 50%; transform: scaleX(0); }
+
+/* round buttons: no fill, a thin ring, a white icon. In focus: white, a dark icon, a little bigger. */
+.np-b {
+  flex: none; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: #fff;
+  box-shadow: inset 0 0 0 0.09375rem rgba(255, 255, 255, 0.32);
+  transition: transform 150ms ease-out, background 150ms ease-out, color 150ms ease-out;
+}
+.np-b svg { display: block; fill: currentColor; }
+.np-b svg.line { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.np-b.focus { background: rgba(255, 255, 255, 0.96); color: #10161d; transform: scale(1.1); box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.3); }
+.np-ctl { display: flex; align-items: center; justify-content: center; }
+
+/* shuffle: a very small green mark midway between the card's edge and Previous, there only while
+   shuffle is on in Spotify (nothing at all while it is off). Not a button: Spotify will not change shuffle from outside on a TV's own app. */
+.np-shuf { position: absolute; display: flex; align-items: center; justify-content: center; color: #1ed760; opacity: 0; transition: opacity 250ms ease; }
+.np-shuf.on { opacity: 1; }
+.np-shuf svg { display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.np-s .np-shuf { left: 1.8125rem; top: 9.4375rem; width: 2.75rem; height: 2.75rem; }
+.np-s .np-shuf svg { width: 1rem; height: 1rem; }
+.np-l .np-ctl { position: relative; }
+.np-l .np-shuf { left: 1.4375rem; top: 50%; margin-top: -1.625rem; width: 3.25rem; height: 3.25rem; }
+.np-l .np-shuf svg { width: 1.25rem; height: 1.25rem; }
+
+/* small: art 92 at 16,16; the song and artist beside it; the size button; the line; the controls */
+.np-s .np-text { position: absolute; left: 7.75rem; right: 5rem; top: 1.8125rem; }
+.np-s .np-title { font-size: 1.875rem; line-height: 2.25rem; }
+.np-s .np-artist { font-size: 1.375rem; line-height: 1.75rem; margin-top: 0.125rem; }
+.np-s .np-size { position: absolute; right: 1rem; top: 2.25rem; width: 3.25rem; height: 3.25rem; }
+.np-s .np-size svg { width: 1.5rem; height: 1.5rem; }
+.np-s .np-bar { position: absolute; left: 1rem; right: 1rem; top: 7.75rem; height: 0.3125rem; }
+.np-s .np-ctl { position: absolute; left: 0; right: 0; top: 8.8125rem; height: 4rem; }
+.np-s .np-ctl .np-b + .np-b { margin-left: 1.875rem; }
+.np-s .np-skip { width: 3.5rem; height: 3.5rem; }
+.np-s .np-skip svg { width: 1.625rem; height: 1.625rem; }
+.np-s .np-play { width: 4rem; height: 4rem; }
+.np-s .np-play svg { width: 1.875rem; height: 1.875rem; }
+
+/* large: a small clock and the shrink button on top; art 280 at 28,106; the rest in the column beside it */
+.np-clock {
+  position: absolute; left: 1.75rem; top: 1.375rem; font-family: "Antonio", "Arial Narrow", sans-serif; font-weight: 400;
+  font-size: 4rem; line-height: 1; letter-spacing: -0.01em; white-space: nowrap; color: #fff;
+}
+.np-clock small { font-size: 1.625rem; font-weight: 400; margin-left: 0.375rem; letter-spacing: 0.02em; }
+.np-l .np-size { position: absolute; right: 1.75rem; top: 1.6875rem; width: 3.375rem; height: 3.375rem; }
+.np-l .np-size svg { width: 1.5rem; height: 1.5rem; }
+.np-col { position: absolute; left: 21.25rem; right: 1.75rem; top: 6.625rem; height: 17.5rem; display: flex; flex-direction: column; justify-content: space-between; }
+.np-l .np-title { font-size: 2.875rem; line-height: 3.375rem; }
+.np-l .np-artist { font-size: 1.875rem; line-height: 2.375rem; margin-top: 0.25rem; }
+.np-prog { display: flex; align-items: center; font-size: 1.25rem; line-height: 1.5rem; color: rgba(255, 255, 255, 0.88); font-variant-numeric: tabular-nums; }
+.np-prog .np-bar { flex: 1; height: 0.375rem; margin: 0 0.875rem; }
+.np-l .np-ctl { margin-top: 1.125rem; }
+.np-l .np-ctl .np-b + .np-b { margin-left: 2.125rem; }
+.np-l .np-skip { width: 4.5rem; height: 4.5rem; }
+.np-l .np-skip svg { width: 2rem; height: 2rem; }
+.np-l .np-play { width: 5.25rem; height: 5.25rem; }
+.np-l .np-play svg { width: 2.375rem; height: 2.375rem; }
+
+/* C. OK held: a dark veil, and a pill that fills from the left in 1.2 s. Let go early and it empties in 0.25 s. */
+.np-veil {
+  position: absolute; z-index: 3; top: 0; right: 0; bottom: 0; left: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(8, 12, 18, 0.45); opacity: 0; transition: opacity 200ms ease;
+}
+.np.holding .np-veil { opacity: 1; }
+.np.holding .np-tip { opacity: 0; }   /* one message at a time */
+.np-hold {
+  position: relative; width: 20rem; height: 3.625rem; border-radius: 1.8125rem; overflow: hidden; display: flex; align-items: center; justify-content: center;
+  background: rgba(8, 12, 18, 0.55); box-shadow: inset 0 0 0 0.09375rem rgba(255, 255, 255, 0.4);
+  font-size: 1.375rem; line-height: 1.75rem; font-weight: 600; color: #fff;
+}
+.np-hold i { position: absolute; top: 0; bottom: 0; left: 0; width: 100%; background: rgba(255, 255, 255, 0.36); transform-origin: 0 50%; transform: scaleX(0); transition: transform 250ms ease-out; }
+.np.press .np-hold i { transform: scaleX(1); transition: transform 1200ms linear; }
+.np-hold span { position: relative; }
+
+/* browser previews (nowplaying.js mouse()): the card can be clicked, and the pointer shows */
+.np-veil { pointer-events: none; }
+.np-mouse body { cursor: default; }
+.np-mouse .np { pointer-events: auto; }
+.np-mouse .np-s, .np-mouse .np-l { pointer-events: none; }
+.np-mouse .np.small .np-s, .np-mouse .np.large .np-l { pointer-events: auto; }
+.np-mouse .np-b { cursor: pointer; }
+
+/* the first frame of a pop-in, and a TV that cannot afford the moving card: nothing glides */
+.np.nomorph, .np.nomorph .np-art, .np.fade, .np.fade .np-art { transition: none; }
+.np.nomorph .np-card { transition: none; }
+.np.nomorph .np-s, .np.nomorph .np-l, .np.fade .np-s, .np.fade .np-l { transition: none; }
+/* home.np_morph "fade": the card dips out, changes size out of sight and comes back */
+.np.fade .np-card { transition: opacity 180ms ease, transform 180ms ease, box-shadow 300ms ease; }
+.np.fade.swap .np-card { opacity: 0; transform: scale(0.96); }
+
+/* the big clock and the date line step aside for the large card (0.5 s), and come back after it */
+.mode-solar .time, .mode-solar .date { transition: opacity 500ms ease, transform 500ms ease; }
+.mode-solar.np-big .time { opacity: 0; transform: scale(0.94); }
+.mode-solar.np-big .date { opacity: 0; }

@@ -639,3 +639,31 @@ URLs. Credit "Data from JustWatch" somewhere quiet (their terms).
   (`picture.modes`), and `GET /api/picture` lists them. App order documented; `dock_max` follows
   `home.dock_size`. `/api/ask` answers `409` when `ask.enabled` is `false`.
 - Public export. The dated history of the private build is not included.
+
+### Spotify now playing: `GET /api/now-playing` (on-TV app only)
+What Spotify is playing on the account, on any device, for the home's card (docs/SPOTIFY.md).
+```json
+{"ok": true, "configured": true, "playing": true, "progress_ms": 42089, "age_ms": 1200,
+ "device": {"name": "Living room", "type": "TV"},
+ "item": {"id": "...", "title": "Song", "artist": "Artist", "art": "https://...jpg", "duration_ms": 204000}}
+```
+- `configured` is `false` until the keys have been handed over (`scripts/spotify-auth.py --tv`).
+- `shuffle` (true or false) is in the answer whenever Spotify reports a player.
+  `POST /api/now-playing/shuffle` `{"on": true}` switches it.
+- `age_ms`: how long ago the app read `progress_ms` from Spotify. While `playing`, run the clock
+  on from `progress_ms + age_ms`.
+- `item` is missing when nothing is playing anywhere, and during adverts.
+- Spotify is asked every 3 s while playing and every 10 s otherwise, and only while this is being
+  called (it stops 30 s after the last call).
+
+`POST /api/now-playing/play`, `/pause`, `/next`, `/previous`: control playback on whichever device
+is playing. Answers with the same shape as above. 403 when Spotify refuses (no Premium, or a
+device that takes no remote control), 404 when nothing is playing.
+
+`POST /api/spotify/setup` `{"client_id", "client_secret", "accounts": [{"refresh_token",
+"authorized_at"}]}` (one entry per Spotify account; a single `refresh_token` also works) stores
+the keys in the app's private storage (they are never sent back out). With several accounts the
+card shows whichever is playing, the one on a TV first, and `account` in the answer names it.
+`play` with nothing to resume tries a TV among the accounts' devices, then the TV's own Spotify
+app, and answers 404 if neither starts; `POST /api/spotify/forget`
+removes them; `GET /api/spotify` says whether it is set up.

@@ -360,6 +360,7 @@
     var mm = (m < 10 ? "0" : "") + m;
     var hm = CLOCK24 ? (h < 10 ? "0" : "") + h + ":" + mm : (h % 12 || 12) + ":" + mm;
     var hmx = hm + (CLOCK24 ? "" : "<small>" + esc(h < 12 ? t("am") : t("pm")) + "</small>");
+    if (SOLAR && window.nowPlaying) window.nowPlaying.clock(hmx);
     if (SOLAR) {
       // the glass clock, as in the scenes: a frosted copy of the landscape, a sheen and a rim
       if ($("time").getAttribute("data-hm") !== hmx) {
@@ -1241,7 +1242,19 @@
   }
 
   // ---------------- focus ----------------
+  // the Spotify now-playing card (nowplaying.js), solar look only
+  function npOn() { return SOLAR && !!window.nowPlaying && window.nowPlaying.focusable(); }
+  // OK on the selected card: the TV's Spotify app. False when there is none to open.
+  function openSpotify() {
+    var a = data.apps.filter(function (x) { return /spotify/i.test(x.package || ""); })[0];
+    var pkg = a ? a.package : "com.spotify.tv.android";
+    if (TV && TV.launch) return !!TV.launch(pkg);
+    if (MOCK || PREVIEW) return false;
+    api("POST", "/api/launch", { app: pkg }).catch(function (e) { status(e.message); });
+    return true;
+  }
   function clearFocus() {
+    if (window.nowPlaying && zone !== "np") window.nowPlaying.blur();
     shelfEls.concat(gridEls, quickEls).forEach(function (el) { if (el) el.classList.remove("focus"); });
     $("people").classList.remove("focus");
     Array.prototype.forEach.call($("people").children, function (el) { el.classList.remove("focus"); });
@@ -1277,6 +1290,10 @@
     if (zone === "updask") { renderAsk(); return; }
     if (zone === "menu") { renderMenu(); return; }
     if (zone === "pmenu") { renderPop(); $("people").classList.add("focus"); return; }
+    if (zone === "np") {
+      if (npOn()) { window.nowPlaying.paint(); return; }
+      zone = "grid";   // the card left while it had the focus
+    }
     if (zone === "quick" && quickEls[qi]) {
       quickEls[qi].classList.add("focus");
       hero(null);
@@ -1327,6 +1344,14 @@
     if (zone === "gear") { if (dy) { gi = Math.max(0, Math.min(gearItems().length - 1, gi + dy)); renderGear(); } return; }
     if (zone === "inputs") { var dI = dy || dx; if (dI) { ii = Math.max(0, Math.min(INPUTS.length - 1, ii + dI)); renderInputs(); } return; }
     if (zone === "updask") { if (dy) { ai = Math.max(0, Math.min(1, ai + dy)); renderAsk(); } return; }
+    if (zone === "np") {
+      // the now-playing card: down is the app bar again, up past the card is the top of the screen
+      var out = window.nowPlaying.move(dx, dy, peopleOn() || hasQuick());
+      if (out === "down") zone = "grid";
+      else if (out === "up") { if (peopleOn()) toPeople(); else { zone = "quick"; qi = 0; } }
+      paintFocus();
+      return;
+    }
     if (lift) { moveLift(dx, dy); return; }
     // Night with More apps open: the cards step aside, so up and down skip them
     var cards = NIGHT && expanded ? [] : shelfEls;
@@ -1394,6 +1419,8 @@
         }
       } else if (dy < 0 && row === 0) {
         if (cards.length && !SOLAR) zone = "shelf";
+        // the now-playing card: there while music is on; closed or gone after a pause, up brings the last song back
+        else if (SOLAR && window.nowPlaying && window.nowPlaying.recall()) { zone = "np"; window.nowPlaying.enter(); }
         else if (peopleOn()) toPeople();
         else if (hasQuick()) zone = "quick";   // offline the sleep and picture buttons are hidden
       } else if (dy < 0) {
@@ -1447,6 +1474,7 @@
 
   function activate() {
     touched = true;
+    if (zone === "np") return;   // the card's own OK (nowplaying.js)
     if (zone === "settings") { setActivate(); return; }
     if (zone === "smart") { window.smartHome.ok(); return; }
     if (zone === "gear") { var gk = gearItems()[gi]; if (gk === "home") openSettings(); else if (gk === "bt") { closeGear(); paintFocus(); openSettingsScreen("bluetooth"); } else openTvSettings(); return; }
@@ -1628,6 +1656,7 @@
     $("people-pop").setAttribute("aria-label", t("who_watching"));
     $("apps-section").setAttribute("aria-label", t("apps"));
     $("settings").setAttribute("aria-label", t("set_title"));
+    if (window.nowPlaying) window.nowPlaying.words();
   }
 
   function openSettings() {
@@ -2400,14 +2429,19 @@
   // OK acts when it is let go, so holding it can pick things up instead (tvOS does the same).
   // Works for remotes that repeat the key while it is held and for ones that only send the press
   // and, later, the release. One press is one action: a pick-up never also opens the app.
-  var okDown = false, okHeld = false, okTimer = null;
-  function okReset() { okDown = false; okHeld = false; clearTimeout(okTimer); }
+  var okDown = false, okHeld = false, okTimer = null, okNp = false;
+  function okReset() {
+    okDown = false; okHeld = false; clearTimeout(okTimer);
+    if (okNp) { okNp = false; window.nowPlaying.okCancel(); }
+  }
   document.addEventListener("keydown", function (e) {
     if (typingKey(e)) return;   // typing a place or a name: the keys belong to the text box
     if (isOk(e)) {
       e.preventDefault();
       if (e.repeat || okDown) return;   // a held key repeating: the timer is already running
       okDown = true; okHeld = false;
+      // the now-playing card times OK itself: a press, or held 1.2 s to stop the music
+      if (zone === "np" && npOn()) { okNp = true; window.nowPlaying.okDown(); return; }
       okTimer = setTimeout(function () { okHeld = true; if (!hold()) activate(); ensureFocus(); }, HOLD_MS);
       return;
     }
@@ -2415,6 +2449,7 @@
     if (arrow) move(arrow[0], arrow[1]);
     else if (isBack(e)) goHome();
     else if (isMenu(e)) { if (!e.repeat) hold(); }   // optional: many remotes have no Menu key
+    else if (SOLAR && window.nowPlaying && window.nowPlaying.mediaKey(e)) { /* play/pause, rewind, fast forward: the card's */ }
     else { ensureFocus(); return; }                   // anything else is not ours: Android gets it
     e.preventDefault();
     ensureFocus();
@@ -2423,6 +2458,7 @@
     if (!isOk(e) || isTyping()) return;
     e.preventDefault();
     if (!okDown) return;
+    if (okNp) { okNp = false; okReset(); window.nowPlaying.okUp(); ensureFocus(); return; }
     var held = okHeld;
     okReset();
     if (!held) activate();
@@ -2547,7 +2583,9 @@
   // the native side calls these
   // Home on the remote also re-reads the lists, so an order arranged on the phone shows straight away
   window.tv = { back: goHome, home: function () { if (zone === "settings") closeSettings(); else goHome(); refresh(); },
-    resume: function () { okReset(); refresh(); if (!OFFLINE) refreshQuick(); refreshWeather(); },
+    resume: function () { okReset(); refresh(); if (!OFFLINE) refreshQuick(); refreshWeather(); if (window.nowPlaying) window.nowPlaying.refresh(); },
+    // another app is in front: the now-playing card stops asking until the home is back (resume)
+    away: function () { if (window.nowPlaying) window.nowPlaying.away(); },
     // the launcher's file picker has copied the chosen photos into its own storage (Home settings)
     photosAdded: function (names) { photosAdded(names); },
     // the launcher's updater has news (Updater.kt)
@@ -2573,6 +2611,11 @@
       clock();
       refreshWeather();
       setInterval(refreshWeather, WX_EVERY * 60000);
+      // the Spotify now-playing card: needs the bridge, so not in the saved offline copy
+      if (window.nowPlaying && !OFFLINE) window.nowPlaying.start({ api: api, t: t, kept: kept, keep: keep, morph: HOME.np_morph,
+        launch: openSpotify, icon: function () { return iconUrl("com.spotify.tv.android"); }, gone: function () { if (zone === "np") { zone = "grid"; paintFocus(); } },
+        // a mouse click on the card in a browser preview: the focus moves there, as Up from the bar would
+        take: function () { if (["grid", "quick", "people", "shelf", "np"].indexOf(zone) < 0) return; touched = true; zone = "np"; paintFocus(); } });
     } else if (NIGHT) {
       buildScenes();
       // ?scene=fog starts on that scene, for previews (?scene=own: the first of the household's

@@ -87,6 +87,8 @@ class HomeActivity : Activity() {
     override fun onStart() { super.onStart(); current = java.lang.ref.WeakReference(this) }
 
     override fun onResume() { super.onResume(); hideBars(); if (ready) js("window.tv && tv.resume()") }
+    // Another app is in front: the page stops asking for things only the home shows (Spotify's now playing)
+    override fun onStop() { super.onStop(); if (ready) js("window.tv && tv.away && tv.away()") }
     override fun onNewIntent(i: Intent) { super.onNewIntent(i); js("window.tv && tv.home()") }
 
     override fun dispatchKeyEvent(e: KeyEvent): Boolean {

@@ -227,6 +227,25 @@ class Server(private val ctx: Context, port: Int) : NanoWSD(port) {
             // renames, removes and reorders people with it, as it does with the computer bridge.
             "GET /api/people" -> json(200, ok().put("people", Store.people()))
             "POST /api/people" -> { savePeople(body(s)); json(200, ok().put("people", Store.people())) }
+            // Spotify now playing, for the home's card. The keys arrive once from scripts/spotify-auth.py
+            // and are never sent back out.
+            "GET /api/now-playing" -> json(200, ok(Spotify.nowPlaying()))
+            "POST /api/now-playing/play", "POST /api/now-playing/pause", "POST /api/now-playing/next", "POST /api/now-playing/previous" ->
+                json(200, ok(Spotify.control(path.substringAfterLast('/'))))
+            // {"on": true|false}: shuffle for the account on the card
+            "POST /api/now-playing/shuffle" -> json(200, ok(Spotify.shuffle(body(s).optBoolean("on"))))
+            "GET /api/spotify" -> json(200, ok(Spotify.status()))
+            "POST /api/spotify/setup" -> {
+                // one sign-in per Spotify account: "accounts": [{refresh_token, authorized_at}], or a single refresh_token
+                val b = body(s)
+                val list = ArrayList<Pair<String, Long>>()
+                b.optJSONArray("accounts")?.let { a -> for (i in 0 until a.length()) a.optJSONObject(i)?.let { o ->
+                    if (o.optString("refresh_token").isNotEmpty()) list += o.optString("refresh_token") to o.optLong("authorized_at") } }
+                if (list.isEmpty() && b.optString("refresh_token").isNotEmpty()) list += b.optString("refresh_token") to b.optLong("authorized_at")
+                Spotify.setup(b.optString("client_id"), b.optString("client_secret"), list)
+                json(200, ok(Spotify.status()))
+            }
+            "POST /api/spotify/forget" -> { Spotify.forget(); json(200, ok(Spotify.status())) }
             "GET /api/settings" -> json(200, settings())
             "POST /api/settings" -> { saveSettings(body(s)); json(200, settings()) }
             "POST /api/phones/forget" -> { Auth.forgetAll(); json(200, ok().put("note", "Every phone must pair again.")) }

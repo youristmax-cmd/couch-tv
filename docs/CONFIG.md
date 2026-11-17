@@ -154,6 +154,7 @@ Home settings saves to the same `bridge/data/people.json` the phone uses.
 | `hide_packages` [none] | Android package names never shown on the home or in More apps, for a maker's own clutter (help apps, file browsers, screen sharing tools). `survey-tv.py` lists every TV app with its package name. For example `["com.example.tvhelp"]`. |
 | `updates` [none: the TV asks once] | The answer to "tell you when a new couch-tv version is out?", asked at setup: `notify` (the TV home looks on GitHub once a week and puts a dot on the gear tile) or `manual` (nothing by itself; Home settings, Updates, Check for updates now). Used only until the TV has an answer; after that the switch in Home settings, Updates wins. Option C has no updates. |
 | `dock_size` [10] | How many apps sit in the Night dock before Settings and More apps. 1 to 10. Everything else is behind More apps. The phone's Arrange apps keeps to the same number. |
+| `np_morph` [`layout`] | The Spotify now-playing card on the landscape home ([SPOTIFY.md](SPOTIFY.md)): how its small and large sizes change into each other. `layout` moves and resizes the card; `flip` does the same with transforms only, for a TV that drops frames; `fade` is a plain crossfade. |
 | `language` [the TV's own language if the home speaks it, else `en`] | The TV home's language until someone picks one in Home settings: `en` (English), `es` (Spanish), `es-MX` (Mexican Spanish) or `it` (Italian). The phone remote has its own choice, "Same as the TV" by default. |
 
 ## Apps on the home

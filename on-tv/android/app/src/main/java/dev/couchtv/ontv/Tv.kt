@@ -88,6 +88,27 @@ object Tv {
         return true
     }
 
+    /** The name this TV goes by on the network and in other apps (Spotify Connect shows it), or "". */
+    fun deviceName(): String = runCatching {
+        Settings.Global.getString(ctx.contentResolver, "device_name") ?: Settings.Secure.getString(ctx.contentResolver, "bluetooth_name")
+    }.getOrNull().orEmpty()
+
+    /**
+     * A media key for one app only, through that app's own media button receiver (play for Spotify,
+     * say). Unlike mediaKey above, it can never land on whichever other app played last. False when
+     * the app is not installed or takes no media buttons.
+     */
+    fun mediaButtonTo(pkg: String, keyCode: Int): Boolean {
+        if (!hasPackage(pkg)) return false
+        val rec = ctx.packageManager.queryBroadcastReceivers(Intent(Intent.ACTION_MEDIA_BUTTON).setPackage(pkg), 0).firstOrNull() ?: return false
+        val comp = android.content.ComponentName(rec.activityInfo.packageName, rec.activityInfo.name)
+        for (action in intArrayOf(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.ACTION_UP)) {
+            ctx.sendBroadcast(Intent(Intent.ACTION_MEDIA_BUTTON).setComponent(comp)
+                .putExtra(Intent.EXTRA_KEY_EVENT, android.view.KeyEvent(action, keyCode)))
+        }
+        return true
+    }
+
     fun text(s: String) {
         if (useFireRemote()) { FireRemote.text(s); return }
         needAdb("Typing")
