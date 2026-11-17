@@ -127,4 +127,29 @@ object LinkRules {
         send()
         return true
     }
+
+    // ---------------------------------------------------------------- a title's link, and which app gets it
+
+    /**
+     * Makes an "intent:" link go to one app. The links JustWatch gives are of two kinds: some name
+     * the app they are for ("package=com.netflix.ninja"), many name none and are a plain https
+     * address ("intent://www.peacocktv.com/deeplink?...#Intent;scheme=https;end"), which a TV may
+     * hand to a browser, or to nothing.
+     *  - always = false: the package is added only to a link that names no app of its own.
+     *  - always = true: the link is sent to this package whatever it names. That is for a title
+     *    watched in a known app: JustWatch names the Android TV edition ("com.hulu.livingroomplus")
+     *    where a Fire TV has another ("com.hulu.plus").
+     * Anything that is not an intent: link, or has a second intent inside it (SEL), is left as it is.
+     */
+    fun aim(uri: String, pkg: String, always: Boolean = false): String {
+        if (!uri.startsWith("intent:") || !Regex("[A-Za-z0-9_.]+").matches(pkg)) return uri
+        val at = uri.indexOf("#Intent;")
+        if (at < 0) return uri
+        val parts = uri.substring(at + "#Intent;".length).split(';').filter { it.isNotEmpty() && it != "end" }
+        if ("SEL" in parts) return uri
+        val named = parts.any { it.startsWith("package=") || it.startsWith("component=") }
+        if (named && !always) return uri
+        val kept = parts.filter { !it.startsWith("package=") && !it.startsWith("component=") }
+        return uri.substring(0, at) + "#Intent;" + (kept + "package=$pkg").joinToString(";") + ";end"
+    }
 }

@@ -197,4 +197,43 @@ class LinkRulesTest {
         e = Evening(playAt = 3000, inPlace = false)
         assertFalse(e.byAdb()); assertTrue(e.sends.isEmpty())
     }
+
+    // ---------------------------------------------------------------- which app a title's link goes to
+
+    // links of the forms JustWatch gave in November 2026 (United States), with made-up ids
+    private val peacockLink = "intent://www.peacocktv.com/deeplink?deeplinkData=%7B%22pvid%22%3A%2200000000-0000-4000-8000-000000000508%22%2C%22type%22%3A%22EPISODE%22%2C%22action%22%3A%22PDP%22%7D#Intent;launchFlags=0x00800000;scheme=https;end"
+    private val netflixLink = "intent://www.netflix.com/watch/12345678#Intent;launchFlags=0x00800000;scheme=https;package=com.netflix.ninja;S.source=30;end"
+    private val huluLink = "intent:#Intent;launchFlags=0x00800000;package=com.hulu.livingroomplus;action=hulu.intent.action.PLAY_CONTENT;S.content_id=00000000-0000-4000-8000-000000000042;end"
+    private val fuboLink = "intent://www.fubo.tv/welcome/series/123456789/x/?season=5#Intent;launchFlags=0x00800000;scheme=https;component=com.fubo.firetv.screen/tv.fubo.mobile.presentation.onboarding.dispatch.controller.DispatchActivity;end"
+
+    @Test fun aLinkThatNamesNoAppIsGivenOne() {
+        // a plain https address inside an intent: it would go to a browser, or nowhere
+        assertEquals(peacockLink.removeSuffix(";end") + ";package=com.peacock.peacockfiretv;end", LinkRules.aim(peacockLink, "com.peacock.peacockfiretv"))
+        // one that names its app is left alone
+        assertEquals(netflixLink, LinkRules.aim(netflixLink, "com.netflix.ninja"))
+        assertEquals(netflixLink, LinkRules.aim(netflixLink, "com.other.app"))
+        assertEquals(fuboLink, LinkRules.aim(fuboLink, "com.other.app"))
+    }
+
+    @Test fun aLinkForOneEditionOfAnAppIsSentToTheOneInstalled() {
+        // JustWatch names the Android TV edition; a Fire TV has another package for the same app
+        assertEquals("intent:#Intent;launchFlags=0x00800000;action=hulu.intent.action.PLAY_CONTENT;S.content_id=00000000-0000-4000-8000-000000000042;package=com.hulu.plus;end",
+            LinkRules.aim(huluLink, "com.hulu.plus", always = true))
+        // a screen named inside the other edition goes too
+        val aimed = LinkRules.aim(fuboLink, "com.fubo.other", always = true)
+        assertFalse(aimed.contains("component=")); assertTrue(aimed.endsWith(";scheme=https;package=com.fubo.other;end"))
+        assertTrue(aimed.startsWith("intent://www.fubo.tv/welcome/series/123456789/x/?season=5#Intent;"))
+        // already the right one: the same link, with the package where it now goes
+        assertEquals("intent://www.netflix.com/watch/12345678#Intent;launchFlags=0x00800000;scheme=https;S.source=30;package=com.netflix.ninja;end",
+            LinkRules.aim(netflixLink, "com.netflix.ninja", always = true))
+    }
+
+    @Test fun whatIsNotSuchALinkIsLeftAsItIs() {
+        for (u in listOf("https://www.netflix.com/watch/12345678", "dtvnow://deeplink.directvnow.com/play/channel/KTLA/123", "", "intent://x/y",
+            "intent://x#Intent;scheme=https;SEL;package=com.browser;end"))
+            for (always in listOf(false, true)) assertEquals(u, u, LinkRules.aim(u, "com.some.app", always))
+        // a package name that is not one is never written into a link
+        assertEquals(peacockLink, LinkRules.aim(peacockLink, "com.x;S.evil=1"))
+        assertEquals(peacockLink, LinkRules.aim(peacockLink, ""))
+    }
 }

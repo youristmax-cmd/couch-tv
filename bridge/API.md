@@ -658,6 +658,12 @@ Every title object (find result, play, playing, continue, picks) carries `poster
 URLs. Credit "Data from JustWatch" somewhere quiet (their terms).
 
 ## Change notes
+- On-TV app, Keep watching, after its first night on a TV: an item whose app names only the
+  episode becomes the show's (`title` the show, `episode_title` the app's own word, with `lookup`
+  on); an app that names nothing gets one item with `"kind": "app"`; every item has `icon` when
+  it has no picture; `POST /api/continue/open` sends a title's link only to an app that accepts
+  it; the looks of `GET /api/continue/log` give each metadata value's Java `class` and a
+  `session` part, and two more decisions, `preview` and `app`.
 - On-TV app: Keep watching from what was really watched on the TV (other apps' media sessions):
   `w-` items and `watching` in `GET /api/continue`, `GET /api/continue/log`,
   `POST /api/continue/forget`, `GET /api/continue/art/<file>`, and `watching` in its
@@ -812,25 +818,49 @@ the `w-` items go to everyone.
   {"id": "w-3fa9c01b77d2", "title": "Stranger Things", "episode_title": "The Weirdo on Maple Street",
    "season": 1, "episode": 2,
    "app": {"id": "netflix", "name": "Netflix", "package": "com.netflix.ninja"}, "service": "netflix",
-   "poster": null, "backdrop": "/api/continue/art/3fa9c01b77d2.jpg?v=1893525060000",
+   "poster": null, "backdrop": "/api/continue/art/3fa9c01b77d2.jpg?v=1893525060000", "icon": null,
    "progress": 0.413, "position_ms": 1362000, "duration_ms": 3300000,
-   "kind": "continue", "last_played": "2030-01-01T19:31:00Z", "source": "tv"}
+   "kind": "continue", "last_played": "2030-01-01T19:31:00Z", "source": "tv"},
+  {"id": "w-0c41d9a2e7b5", "title": "Harbour Lights", "episode_title": "The Long Way Round",
+   "season": 5, "episode": 8,
+   "app": {"id": "peacock", "name": "Peacock TV", "package": "com.peacock.peacockfiretv"}, "service": "peacock",
+   "poster": "https://images.justwatch.com/poster/...jpg", "backdrop": "https://images.justwatch.com/backdrop/...jpg", "icon": null,
+   "progress": 0.083, "position_ms": 215000, "duration_ms": 2590000,
+   "kind": "continue", "last_played": "2030-01-01T19:16:00Z", "source": "tv"},
+  {"id": "w-77aa01c3d2e4", "title": "Hulu", "episode_title": null, "season": null, "episode": null,
+   "app": {"id": "hulu", "name": "Hulu", "package": "com.hulu.plus"}, "service": "hulu",
+   "poster": null, "backdrop": null, "icon": "/icon/com.hulu.plus",
+   "progress": null, "position_ms": 540000, "duration_ms": null,
+   "kind": "app", "last_played": "2030-01-01T19:21:00Z", "source": "tv"}
  ]}
 ```
 - `watching`: `access` is whether the TV's owner has allowed the app to see media sessions (one
   ADB command, docs/KEEP-WATCHING.md). `false` means there are no `w-` items and never will be
   until it is allowed, so an empty row can say why. `since`: listening since then (this run of the
   app), or `null`. `titles`: how many are in the watch log. `lookup`: the setting, below.
-- A `w-` item is one title in one app: the id is made from the app's package and the title, so it
-  stays the same while the episode and the position move on.
-- `season`, `episode`, `episode_title`: only what the app's own words said. `null` when it did not
+- A `w-` item is one title in one app: the id is made from the app's package and the title as the
+  app gave it, so it stays the same while the position moves on.
+- `season`, `episode`, `episode_title`: what the app's own words said. `null` when it did not
   say; nothing is guessed.
+- **An app that names only the episode** (the second item; Peacock on a Fire TV). With `lookup`
+  on the show is worked out (docs/KEEP-WATCHING.md), and then `title` is the show,
+  `episode_title` the name the app gave, `season` and `episode` JustWatch's numbers for it
+  (`null` when several episodes of the show carry that name), `poster` and `backdrop` the show's.
+  Until then, and with `lookup` off, `title` is the episode's name and the rest are `null`. The id
+  goes by the episode's name, so the next episode's card has another id.
+- **`"kind": "app"`** (the third item): an app that played for 2 minutes and named nothing (Hulu
+  on a Fire TV). One item for the app at most, and none while the app has an item with a real
+  title. `title` is the app's name, for wording like "Continue in Hulu". `position_ms` is where
+  the app says it is, in whatever it is playing; there is no `progress` and no `duration_ms`.
+  Every other item has `"kind": "continue"`.
 - `app.id` and `service`: the app's id in couch-tv's app table, or `null` for an app that is not
-  in it. `app.name` and `app.package` are always there.
+  in it. `app.name` and `app.package` are always there, for every app.
 - `backdrop`: the app's own picture as a copy kept on the TV (a path on this server, to be read
   from the same address as this answer), else the `https` address the app published for it, else,
   with `lookup` on, JustWatch's backdrop, else `null`. `poster`: JustWatch's, and only with
   `lookup` on and no picture of the app's own; else `null`.
+- `icon`: the app's icon on this server (`/icon/<package>`, no token needed), given when the item
+  has neither `poster` nor `backdrop`, so the card can still show which app it is; else `null`.
 - `progress` (0 to 1, three decimals), `position_ms`, `duration_ms`: from what the app last
   reported. `null` when it reports no position or no length. An item at 0.95 or more is finished
   and is not in the list.
@@ -841,15 +871,23 @@ the `w-` items go to everyone.
 `404` for anything else. `Cache-Control: max-age=604800`; `?v=` changes when the picture does.
 
 `POST /api/continue/open {"id": "w-..."}`: opens the app the title was watched in
-(`"method": "app"`, `"note": "Opened Netflix."`). With `lookup` on and the title found on
-JustWatch as offered in that app, it is opened the way `POST /api/play` would in that app, and
-the answer is that route's; if that fails the app is opened. `404` when the id is not in the log
-or the app is no longer installed.
+(`"method": "app"`, `"note": "Opened Netflix."`). It opens the title itself only with `lookup` on,
+for an app in the app table, and when the app on this TV accepts the link (Android's package
+manager is asked first; a link the app does not accept is not sent to it or to anything else):
+- a title worked out from an episode's name: the offers of that one episode are asked for, and
+  the link for the watched app is sent to it (`"method": "deeplink"`, `"note": "Opened The Long Way
+  Round in Some App."`); if the app has none for the episode, the show's link;
+- a title found under its own name: what `POST /api/play` would do in that app, and the answer is
+  that route's.
+
+Whenever any of that does not work out, the app is opened. Peacock's Fire TV app accepts no links
+(seen 16 November 2026), so its items always answer `"method": "app"`. `404` when the id is not
+in the log or the app is no longer installed.
 
 `POST /api/continue/forget {"id": "w-..."}` takes one item out of the watch log, with its picture
 (`{"id": "h-0"}` takes a search-history title out). `{"all": true}` empties the watch log, its
-pictures and the raw looks. Answers with the row as it is now (`items`). `404` for an id that is
-not there, `400` with neither `id` nor `all`.
+pictures, the raw looks and the kept episode lists. Answers with the row as it is now (`items`).
+`404` for an id that is not there, `400` with neither `id` nor `all`.
 
 `GET /api/continue/log`: what the apps' media sessions really said, for finding out what each app
 reports. The last 60 looks, newest first. It holds titles of what was watched and never leaves the
@@ -857,32 +895,65 @@ TV except as this answer to a paired phone.
 ```json
 {"ok": true, "watching": {"access": true, "since": "2030-01-01T10:00:00.000-08:00", "titles": 7, "lookup": false},
  "looks": [
-  {"time": "2030-01-01T11:31:00.000-08:00", "package": "com.netflix.ninja", "app": "Netflix",
-   "state": "playing", "state_code": 3, "position_ms": 1362000, "speed": 1.0, "actions": 823,
+  {"time": "2030-01-01T11:21:00.000-08:00", "package": "com.hulu.plus", "app": "Hulu",
+   "state": "playing", "state_code": 3, "position_ms": 540000, "speed": 1.0, "actions": 0,
    "metadata": {
-     "android.media.metadata.TITLE": {"type": "text", "value": "Stranger Things"},
-     "android.media.metadata.DISPLAY_SUBTITLE": {"type": "text", "value": "S1:E2 The Weirdo on Maple Street"},
-     "android.media.metadata.DURATION": {"type": "number", "value": 3300000},
-     "android.media.metadata.ART": {"type": "bitmap", "width": 1280, "height": 720},
-     "description": {"media_id": "80057281"}},
-   "picture": "1280x720:5f3a91c2",
-   "read": {"title": "Stranger Things", "episode_title": "The Weirdo on Maple Street", "season": 1, "episode": 2},
-   "decision": "counted", "detail": "at 41%", "looks": 9}
+     "android.media.metadata.ALBUM": {"class": "null", "type": "null"},
+     "android.media.metadata.ALBUM_ART": {"class": "null", "type": "null"},
+     "android.media.metadata.ARTIST": {"class": "null", "type": "null"},
+     "android.media.metadata.TITLE": {"class": "null", "type": "null"}},
+   "picture": null,
+   "session": {"queue_title": null, "queue_size": null, "session_activity": false},
+   "decision": "app", "detail": "the session names nothing: one card for the app itself", "looks": 2},
+  {"time": "2030-01-01T11:16:00.000-08:00", "package": "com.peacock.peacockfiretv", "app": "Peacock TV",
+   "state": "playing", "state_code": 3, "position_ms": 210000, "speed": 1.0, "actions": 800,
+   "metadata": {
+     "android.media.metadata.DATE": {"class": "java.lang.String", "type": "text", "value": "2020-01-01T00:00:00.000Z"},
+     "android.media.metadata.DISPLAY_TITLE": {"class": "java.lang.String", "type": "text", "value": "The Long Way Round"},
+     "android.media.metadata.DURATION": {"class": "java.lang.Long", "type": "number", "value": 2590000},
+     "android.media.metadata.TITLE": {"class": "java.lang.String", "type": "text", "value": "The Long Way Round"},
+     "description": {"title": "The Long Way Round"}},
+   "picture": null,
+   "session": {"queue_title": null, "queue_size": null, "session_activity": true},
+   "read": {"title": "The Long Way Round", "episode_title": null, "season": null, "episode": null},
+   "decision": "counted", "detail": "at 8%", "looks": 17},
+  {"time": "2030-01-01T11:12:10.000-08:00", "package": "com.peacock.peacockfiretv", "app": "Peacock TV",
+   "state": "buffering", "state_code": 6, "position_ms": 0, "speed": 1.0, "actions": 1,
+   "metadata": {
+     "android.media.metadata.DISPLAY_TITLE": {"class": "java.lang.String", "type": "text", "value": "Harbour Lights (Trailer)"},
+     "android.media.metadata.DURATION": {"class": "java.lang.Long", "type": "number", "value": 150000}},
+   "picture": null,
+   "read": {"title": "Harbour Lights (Trailer)", "episode_title": null, "season": null, "episode": null},
+   "decision": "preview", "detail": "the title says it is a preview; \"Harbour Lights\" is kept for 30 minutes as the show the next title may belong to", "looks": 1}
  ]}
 ```
-(The values above are made up to show the shape: nobody has yet seen what Netflix publishes.)
-- `metadata`: every key the app's `MediaMetadata` had. `type` is `text` (with `value`, 400
-  characters at most), `number` (with `value`), `bitmap` (with `width` and `height`; the picture
-  itself is not here), `rating`, `other` or `unreadable`. `description`, when present, is the
-  session's own `media_id`, `media_uri` and `icon_uri`.
+(Every title, time and number above is made up, as are the items further up: "Harbour Lights" is
+no programme. The keys are the ones two apps were seen to publish on a Fire TV on 16 November
+2026. The `class`, `session` and `description` parts, and the `app` and `preview` decisions, are
+newer than that: they show the shape and have not been seen from a TV.)
+- `metadata`: every key the app's `MediaMetadata` had. `class`: the Java class of the value as the
+  app set it (`java.lang.String`, `java.lang.Long`, `android.graphics.Bitmap`, ...), `"null"` for
+  a key that is there with nothing in it, `"unknown"` when the values could not be read back.
+  `type` says the same in words: `text` (with `value`, 400 characters at most), `number` (with
+  `value`), `bitmap` (with `width` and `height`; the picture itself is not here), `rating`,
+  `null`, `other` or `unreadable`. `description`, when present, is what Android makes of the
+  metadata for a screen that shows it: `title`, `subtitle`, `description`, `media_id`,
+  `media_uri`, `icon_uri`, whichever there are.
+- `session`: what else the session offers that might say what is playing: `queue_title`,
+  `queue_size` and the first three things in the `queue` (`title`, `subtitle`, `media_id`),
+  `extras` (the names of the session's extras, each with the Java class of its value, never the
+  value), and `session_activity` (whether the session has a screen of its own to open). No rule
+  reads any of it yet. `state_extras`, when present: the same for the playback state's extras.
 - `state`: Android's playback state in words (`playing`, `paused`, `stopped`, `buffering`, ...),
   `state_code` its number. `position_ms`: worked out from the state to the moment of the look, or
-  `null`. `state_extras` and `session_extras`, when present, are the names (not the values) of
-  the extras the app attached.
+  `null`.
 - `read`: what the rules took the words to mean. Missing when the session named no title.
 - `decision`: `counted` (in the row), `not yet` (under 2 minutes of playing so far), `too short`
-  (the app says it is under 5 minutes long), `finished` (95% or more), `no title`, or `excluded`
-  (an app in `watching.exclude`). `detail` says why in a sentence.
+  (the app says it is under 5 minutes long), `preview` (the title says it is one: "... (Trailer)";
+  never an item, but its name is kept as a show to try for the next title in that app),
+  `finished` (95% or more), `no title` (the session names nothing, and there is no item for the
+  app yet or the app has titles of its own), `app` (it names nothing and has its item, kind
+  `app`), or `excluded` (an app in `watching.exclude`). `detail` says why in a sentence.
 - `looks`: how many looks this line stands for. A look that says the same as the last one from
   the same app moves that line's `time` and `position_ms` on instead of adding a line, and an
   excluded app keeps one line only.
@@ -890,9 +961,10 @@ TV except as this answer to a paired phone.
 The settings are `watching` in the on-TV app's `GET|POST /api/settings`:
 `{"watching": {"lookup": false, "exclude": ["com.spotify.tv.android", "..."]}}`. `GET` also gives
 `access` and `since` there. Only the keys sent are changed, and a change takes effect at once;
-`400` for a wrong shape. `lookup` (default `false`): look titles whose app gave no picture up on
-JustWatch, which sends the title's name there (docs/KEEP-WATCHING.md). `exclude`: the Android
-packages whose sessions are ignored; a list sent replaces the whole list.
+`400` for a wrong shape. `lookup` (default `false`): ask JustWatch about what was watched, for a
+picture when the app gave none and for the show when the app names only the episode; that sends
+the names of titles, and of previews seen just before them, there (docs/KEEP-WATCHING.md).
+`exclude`: the Android packages whose sessions are ignored; a list sent replaces the whole list.
 
 Nothing is pushed when the row changes: ask again when the home comes to the front.
 

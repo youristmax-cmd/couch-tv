@@ -176,6 +176,35 @@ object FireHome {
         if (now < pausedUntil) return
         if (now - lastJump < 1200) return   // one jump per press, not one per event
         lastJump = now
+        bringForward()
+    }
+
+    /**
+     * Android 9 and older hold an app's activity starts for 5 s after a Home press (the app-switch
+     * delay). Seen on a Fire TV on Fire OS 7 (Android 9), 16 Nov 2026, in the TV's own activity
+     * log: on every Home press Amazon's home was in front for 4.9 to 5.2 s before this home came
+     * back. Moving this app's own task to the front is not an activity start and is not held (the
+     * same was found on a Fire TV Cube on Fire OS 7.7.1.7). Only when the home is the top of its
+     * task (setup shares it). Before the home has ever opened, and on Android 11 and newer
+     * (background start limits): a normal start, as before. Android 10 may quietly refuse the
+     * move, so a moment later the home is checked and started normally if it is not in front.
+     */
+    private fun bringForward() {
+        val sdk = android.os.Build.VERSION.SDK_INT
+        if (sdk >= 30) { App.openHome(); return }
+        val task = runCatching {
+            App.instance.getSystemService(android.app.ActivityManager::class.java).appTasks.firstOrNull {
+                it.taskInfo.topActivity?.className == HomeActivity::class.java.name
+            }
+        }.getOrNull()
+        if (task != null && runCatching { task.moveToFront() }.isSuccess) {
+            Log.i(TAG, "Amazon's home came forward: moved the home's task to the front")
+            HomeActivity.home()
+            if (sdk == 29) android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                if (!HomeActivity.inFront) { Log.i(TAG, "the move to front did not show the home: starting it"); App.openHome() }
+            }, 800)
+            return
+        }
         App.openHome()
     }
 

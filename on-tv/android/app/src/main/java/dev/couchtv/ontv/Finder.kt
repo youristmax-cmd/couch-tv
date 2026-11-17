@@ -23,14 +23,23 @@ object Finder {
               content(country: ${'$'}country, language: ${'$'}language) {
                 title originalReleaseYear posterUrl shortDescription runtime backdrops { backdropUrl } }
               offers(country: ${'$'}country, platform: ANDROID_TV) { $OFFER } } } } }""".trimIndent()
+    // A show's episodes WITHOUT their offers: season number, and each episode's id, number, name and
+    // length. With the offers this answer was 2.3 MB for a show of 381 episodes (17 seasons), far
+    // too much for a TV; like this it is 36 KB. The offers are asked for after, for the one episode.
     private val EPISODES = """
         query(${'$'}country: Country!, ${'$'}language: Language!, ${'$'}id: ID!) {
           node(id: ${'$'}id) { ... on Show { seasons {
             content(country: ${'$'}country, language: ${'$'}language) { seasonNumber }
-            episodes { content(country: ${'$'}country, language: ${'$'}language) { episodeNumber title runtime }
-              offers(country: ${'$'}country, platform: ANDROID_TV) { $OFFER } } } } } }""".trimIndent()
+            episodes { id content(country: ${'$'}country, language: ${'$'}language) { episodeNumber title runtime } } } } } }""".trimIndent()
+    // The offers of one episode, and of its show, in one answer (14 KB for that same show).
+    private val LINKS = """
+        query(${'$'}country: Country!, ${'$'}language: Language!, ${'$'}episode: ID!, ${'$'}show: ID!) {
+          episode: node(id: ${'$'}episode) { ... on Episode { content(country: ${'$'}country, language: ${'$'}language) { episodeNumber }
+            offers(country: ${'$'}country, platform: ANDROID_TV) { $OFFER } } }
+          show: node(id: ${'$'}show) { ... on Show { offers(country: ${'$'}country, platform: ANDROID_TV) { $OFFER } } } }""".trimIndent()
 
-    private fun post(query: String, vars: JSONObject): JSONObject {
+    /** One question to JustWatch. maxBytes: an answer longer than this is not read to the end, and is an error. */
+    private fun post(query: String, vars: JSONObject, maxBytes: Int = 4 * 1024 * 1024): JSONObject {
         vars.put("country", Store.country()).put("language", "en")
         val c = URL(URL_GQL).openConnection() as HttpURLConnection
         c.connectTimeout = 8000; c.readTimeout = 15000
@@ -38,9 +47,20 @@ object Finder {
         c.setRequestProperty("content-type", "application/json")
         c.setRequestProperty("user-agent", "couch-tv-on-tv/1")
         c.outputStream.use { it.write(JSONObject().put("query", query).put("variables", vars).toString().toByteArray()) }
-        val text = (if (c.responseCode in 200..299) c.inputStream else c.errorStream).bufferedReader().readText()
-        c.disconnect()
-        val j = JSONObject(text)
+        val out = java.io.ByteArrayOutputStream()
+        try {
+            val st = c.responseCode
+            ((if (st in 200..299) c.inputStream else c.errorStream) ?: throw ApiError(502, "JustWatch answered $st")).use { s ->
+                val buf = ByteArray(16384)
+                while (true) {
+                    val n = s.read(buf)
+                    if (n < 0) break
+                    out.write(buf, 0, n)
+                    if (out.size() > maxBytes) throw ApiError(502, "JustWatch's answer is too long (over ${maxBytes / 1024} KB)")
+                }
+            }
+        } finally { c.disconnect() }
+        val j = JSONObject(out.toString("UTF-8"))
         j.optJSONArray("errors")?.let { throw ApiError(502, it.getJSONObject(0).optString("message", "JustWatch error")) }
         return j.getJSONObject("data")
     }
@@ -135,21 +155,63 @@ object Finder {
     fun pictures(title: String, service: String?): Pair<String?, String?>? =
         pick(search(title), title, service)?.let { it.poster to it.backdrop }
 
-    data class Episode(val season: Int, val episode: Int, val name: String?, val runtimeMin: Int?, val providers: List<Provider>)
+    /**
+     * The show of this name, for a name an app gave (a preview's): the search result that is the
+     * same title and is a show, the one that app offers first. Null when there is none.
+     */
+    fun show(name: String, service: String?): Title? = pick(search(name, "tv", 5), name, service)
 
-    fun episode(jwId: String, season: Int, episode: Int?): Episode? {
-        val seasons = post(EPISODES, JSONObject().put("id", jwId)).optJSONObject("node")?.optJSONArray("seasons") ?: return null
-        for (i in 0 until seasons.length()) {
-            val s = seasons.getJSONObject(i)
-            if (s.getJSONObject("content").optInt("seasonNumber") != season) continue
-            val eps = s.getJSONArray("episodes")
-            for (j in 0 until eps.length()) {
-                val e = eps.getJSONObject(j); val c = e.getJSONObject("content")
-                if (episode == null || c.optInt("episodeNumber") == episode)
-                    return Episode(season, c.optInt("episodeNumber"), c.optString("title").takeIf { it != "null" }, c.optInt("runtime").takeIf { it > 0 }, providers(e.optJSONArray("offers")))
+    private const val LISTS_FILE = "watching-shows.json"      // {"<show id>": {"at": ..., "episodes": [[id, season, number, name, minutes], ...]}}
+    private val lists = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<ShowRules.Ep>>>()
+    private var listsRead = false
+
+    /**
+     * A show's episodes, without their offers (ShowRules). Asked for once a day for a show, and
+     * kept on the TV in between, restarts included: finding the next episode of a show that is
+     * being watched then asks nobody. Throws when JustWatch could not be asked, or the list is
+     * over 512 KB.
+     */
+    @Synchronized fun episodes(showId: String): List<ShowRules.Ep> {
+        val now = System.currentTimeMillis()
+        if (!listsRead) {
+            listsRead = true
+            runCatching {
+                val j = Store.readJson(LISTS_FILE) as? JSONObject
+                j?.keys()?.forEach { id -> j.optJSONObject(id)?.let { lists[id] = it.optLong("at") to ShowRules.fromJson(it.optJSONArray("episodes")) } }
             }
         }
-        return null
+        lists[showId]?.takeIf { now - it.first < ShowRules.LIST_MS && it.second.isNotEmpty() }?.let { return it.second }
+        val list = ShowRules.episodes(post(EPISODES, JSONObject().put("id", showId), ShowRules.LIST_MAX_BYTES))
+        lists[showId] = now to list
+        // only a few shows' lists are kept: the ones asked for last
+        lists.entries.sortedByDescending { it.value.first }.drop(ShowRules.LISTS_KEPT).forEach { lists.remove(it.key) }
+        runCatching {
+            val j = JSONObject()
+            lists.forEach { (id, v) -> j.put(id, JSONObject().put("at", v.first).put("episodes", ShowRules.toJson(v.second))) }
+            Store.writeJson(LISTS_FILE, j)
+        }
+        return list
+    }
+
+    /** The kept episode lists go (they say which shows were looked into): part of "forget what was watched". */
+    @Synchronized fun forgetEpisodes() {
+        lists.clear(); listsRead = true
+        runCatching { Store.writeJson(LISTS_FILE, JSONObject()) }
+    }
+
+    /**
+     * The offers of one episode and of its show, as JustWatch sends them: {"episode": {"offers":
+     * [...]}, "show": {"offers": [...]}}. episodeId null: the show's only.
+     */
+    fun links(episodeId: String?, showId: String): JSONObject = post(LINKS, JSONObject().put("episode", episodeId ?: showId).put("show", showId), 512 * 1024)
+
+    data class Episode(val season: Int, val episode: Int, val name: String?, val runtimeMin: Int?, val providers: List<Provider>)
+
+    /** One episode with where it streams: found in the show's light list, then its own offers asked for. */
+    fun episode(jwId: String, season: Int, episode: Int?): Episode? {
+        val e = episodes(jwId).firstOrNull { it.season == season && (episode == null || it.episode == episode) } ?: return null
+        val offers = links(e.id, jwId).optJSONObject("episode")?.optJSONArray("offers")
+        return Episode(season, e.episode, e.title.takeIf { it.isNotEmpty() && it != "null" }, e.runtimeMin, providers(offers))
     }
 
     // ---------------------------------------------------------------- the API shapes
@@ -218,7 +280,10 @@ object Finder {
 
         var method: String? = null
         var started: Boolean? = null
-        if (app.deeplink == "jw" && link != null) {
+        // a Fire TV's edition of an app is another package than the one JustWatch names: the link goes to the one installed
+        if (link != null && app.pkg != app.main) link = LinkRules.aim(link!!, app.pkg, always = true)
+        // a link the app cannot take (Android is asked) is not sent, to it or to anything else: the app is searched or opened instead
+        if (app.deeplink == "jw" && link != null && Tv.canOpen(link!!, app.pkg)) {
             val cold = when (app.cold) { "always" -> true; "background" -> Tv.frontPackage() != app.pkg; else -> false }
             try {
                 Tv.startUri(link!!, app.pkg, cold && Adb.connected)

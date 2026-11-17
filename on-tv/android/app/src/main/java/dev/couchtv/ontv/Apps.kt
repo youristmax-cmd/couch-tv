@@ -31,15 +31,32 @@ object Apps {
         TvApp("sbs-on-demand", "SBS On Demand", "com.sbs.ondemand.tv", "#FFCC00", listOf("sbsondemand"), "jw",
             useWeb = Regex("(https://www\\.sbs\\.com\\.au/ondemand/[^/]+/[^/?#]+)"), cold = "always"),
         TvApp("disney-plus", "Disney+", "com.disney.disneyplus", "#113CCF", listOf("disneyplus"), "jw"),
-        TvApp("prime-video", "Prime Video", "com.amazon.amazonvideo.livingroom", "#00A8E1", listOf("amazonprimevideo", "amazon"), "jw"),
-        TvApp("apple-tv", "Apple TV", "com.apple.atve.androidtv.appletv", "#111111", listOf("appletvplus", "itunes"), "jw"),
-        TvApp("paramount-plus", "Paramount+", "com.cbs.ca", "#0064FF", listOf("paramountplus", "paramountpluspremium", "paramountplusbasicwithads"), "jw"),
+        // Fire TV: com.amazon.avod is Prime Video there, and com.amazon.firebat is Amazon's own video
+        // screens on Fire OS. JustWatch (US, November 2026) names the subscription "amazonprime" and
+        // "amazonprimevideowithads"; "amazonprimevideo" is kept from the computer bridge's table.
+        TvApp("prime-video", "Prime Video", "com.amazon.amazonvideo.livingroom", "#00A8E1",
+            listOf("amazonprimevideo", "amazonprime", "amazonprimevideowithads", "amazon"), "jw",
+            alt = listOf("com.amazon.avod", "com.amazon.firebat")),
+        TvApp("apple-tv", "Apple TV", "com.apple.atve.androidtv.appletv", "#111111", listOf("appletvplus", "itunes"), "jw",
+            alt = listOf("com.apple.atve.amazon.appletv")),
+        // com.cbs.ott is the United States' Paramount+ (Fire TV and Android TV); "paramountplusessential" its cheaper plan.
+        TvApp("paramount-plus", "Paramount+", "com.cbs.ca", "#0064FF",
+            listOf("paramountplus", "paramountpluspremium", "paramountplusbasicwithads", "paramountplusessential"), "jw",
+            alt = listOf("com.cbs.ott")),
+        // Peacock and Hulu: in the table so a title watched in them is known as theirs and JustWatch's
+        // offers ("peacocktv", "peacocktvpremium"; "hulu") can be matched to them. "app": "play X" only
+        // opens the app. Peacock's Fire TV app takes no links at all (its manifest has no link filter;
+        // seen 16 November 2026), and Hulu's has not been tried.
+        TvApp("peacock", "Peacock", "com.peacocktv.peacockandroid", "#000000", listOf("peacocktv", "peacocktvpremium"),
+            alt = listOf("com.peacock.peacockfiretv")),
+        TvApp("hulu", "Hulu", "com.hulu.livingroomplus", "#1CE783", listOf("hulu"), alt = listOf("com.hulu.plus")),
         TvApp("kayo", "Kayo", "au.com.kayosports.tv", "#00E676"),
         TvApp("foxtel-go", "Foxtel Go", "au.com.foxtel.atv", "#F05A28"),
         TvApp("9now", "9Now", "au.com.ninenow.ctv", "#00A9E0", listOf("ninenow"), "jw"),
         TvApp("7plus", "7plus", "com.swm.live", "#E4002B", listOf("sevenplus"), "jw"),
         TvApp("10play", "10play", "au.com.tenplay", "#0B0B0B", listOf("tenplay"), "jw"),
-        TvApp("hbo-max", "HBO Max", "com.wbd.stream", "#002BE7", listOf("max", "hbomax"), "search"),
+        // com.hbo.hbonow is HBO Max on a Fire TV.
+        TvApp("hbo-max", "HBO Max", "com.wbd.stream", "#002BE7", listOf("max", "hbomax"), "search", alt = listOf("com.hbo.hbonow")),
         TvApp("google-tv", "Google TV", "com.google.android.videos", "#4285F4", listOf("play", "googleplaymovies")),
         TvApp("twitch", "Twitch", "tv.twitch.android.app", "#9146FF"),
         TvApp("spotify", "Spotify", "com.spotify.tv.android", "#1DB954"),

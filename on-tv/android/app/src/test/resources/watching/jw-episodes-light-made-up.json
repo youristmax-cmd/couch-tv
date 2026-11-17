@@ -1,0 +1,456 @@
+{
+ "node": {
+  "seasons": [
+   {
+    "content": {
+     "seasonNumber": 3
+    },
+    "episodes": [
+     {
+      "id": "tse90301",
+      "content": {
+       "episodeNumber": 1,
+       "title": "Spring Tide",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90302",
+      "content": {
+       "episodeNumber": 2,
+       "title": "The Net Loft",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90303",
+      "content": {
+       "episodeNumber": 3,
+       "title": "Letters from Away",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90304",
+      "content": {
+       "episodeNumber": 4,
+       "title": "Small Change",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90305",
+      "content": {
+       "episodeNumber": 5,
+       "title": "The Pilot's Daughter",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90306",
+      "content": {
+       "episodeNumber": 6,
+       "title": "Looking Back (1)",
+       "runtime": 44
+      }
+     },
+     {
+      "id": "tse90307",
+      "content": {
+       "episodeNumber": 7,
+       "title": "Looking Back (2)",
+       "runtime": 44
+      }
+     }
+    ]
+   },
+   {
+    "content": {
+     "seasonNumber": 1
+    },
+    "episodes": [
+     {
+      "id": "tse90101",
+      "content": {
+       "episodeNumber": 1,
+       "title": "First Light",
+       "runtime": 45
+      }
+     },
+     {
+      "id": "tse90102",
+      "content": {
+       "episodeNumber": 2,
+       "title": "The Ferry Is Late",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90103",
+      "content": {
+       "episodeNumber": 3,
+       "title": "Two Keys",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90104",
+      "content": {
+       "episodeNumber": 4,
+       "title": "A Name on the Hull",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90105",
+      "content": {
+       "episodeNumber": 5,
+       "title": "Gulls and Gossip",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90106",
+      "content": {
+       "episodeNumber": 6,
+       "title": "The Harbour Master",
+       "runtime": 43
+      }
+     }
+    ]
+   },
+   {
+    "content": {
+     "seasonNumber": 2
+    },
+    "episodes": [
+     {
+      "id": "tse90201",
+      "content": {
+       "episodeNumber": 1,
+       "title": "Winter Berths",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90202",
+      "content": {
+       "episodeNumber": 2,
+       "title": "Rust",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90203",
+      "content": {
+       "episodeNumber": 3,
+       "title": "The Chart Room",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90204",
+      "content": {
+       "episodeNumber": 4,
+       "title": "A Borrowed Coat",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90205",
+      "content": {
+       "episodeNumber": 5,
+       "title": "Nine Knots",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90206",
+      "content": {
+       "episodeNumber": 6,
+       "title": "Looking Back (1)",
+       "runtime": 44
+      }
+     },
+     {
+      "id": "tse90207",
+      "content": {
+       "episodeNumber": 7,
+       "title": "Looking Back (2)",
+       "runtime": 44
+      }
+     }
+    ]
+   },
+   {
+    "content": {
+     "seasonNumber": 4
+    },
+    "episodes": [
+     {
+      "id": "tse90401",
+      "content": {
+       "episodeNumber": 1,
+       "title": "The Long Summer",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90402",
+      "content": {
+       "episodeNumber": 2,
+       "title": "Painted Doors",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90403",
+      "content": {
+       "episodeNumber": 3,
+       "title": "What the Tide Left",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90404",
+      "content": {
+       "episodeNumber": 4,
+       "title": "Signal Flags",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90405",
+      "content": {
+       "episodeNumber": 5,
+       "title": "The Regatta",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90406",
+      "content": {
+       "episodeNumber": 6,
+       "title": "A Quiet Word",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90407",
+      "content": {
+       "episodeNumber": 7,
+       "title": "Looking Back (1)",
+       "runtime": 44
+      }
+     },
+     {
+      "id": "tse90408",
+      "content": {
+       "episodeNumber": 8,
+       "title": "Looking Back (2)",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90409",
+      "content": {
+       "episodeNumber": 9,
+       "title": "Episode 9",
+       "runtime": 0
+      }
+     }
+    ]
+   },
+   {
+    "content": {
+     "seasonNumber": 5
+    },
+    "episodes": [
+     {
+      "id": "tse90501",
+      "content": {
+       "episodeNumber": 1,
+       "title": "Home Waters",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90502",
+      "content": {
+       "episodeNumber": 2,
+       "title": "The New Hand",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90503",
+      "content": {
+       "episodeNumber": 3,
+       "title": "Slack Water",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90504",
+      "content": {
+       "episodeNumber": 4,
+       "title": "Three Bells",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90505",
+      "content": {
+       "episodeNumber": 5,
+       "title": "A Lamp in the Window",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90506",
+      "content": {
+       "episodeNumber": 6,
+       "title": "Borrowed Oars",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90507",
+      "content": {
+       "episodeNumber": 7,
+       "title": "Yes... But, Not Yet",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90508",
+      "content": {
+       "episodeNumber": 8,
+       "title": "The Long Way Round",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90509",
+      "content": {
+       "episodeNumber": 9,
+       "title": "Low Tide at Noon",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90510",
+      "content": {
+       "episodeNumber": 10,
+       "title": "Salt and Rope",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90511",
+      "content": {
+       "episodeNumber": 11,
+       "title": "The Gull Knows",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90512",
+      "content": {
+       "episodeNumber": 12,
+       "title": "Fog on the Slipway",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90513",
+      "content": {
+       "episodeNumber": 13,
+       "title": "Looking Back (1)",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90514",
+      "content": {
+       "episodeNumber": 14,
+       "title": "Looking Back (2)",
+       "runtime": 42
+      }
+     },
+     {
+      "id": "tse90515",
+      "content": {
+       "episodeNumber": 15,
+       "title": "Loose Ends",
+       "runtime": 43
+      }
+     }
+    ]
+   },
+   {
+    "content": {
+     "seasonNumber": 6
+    },
+    "episodes": [
+     {
+      "id": "tse90601",
+      "content": {
+       "episodeNumber": 1,
+       "title": "New Moorings",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90602",
+      "content": {
+       "episodeNumber": 2,
+       "title": "The Lighthouse Keeper's Rule",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90603",
+      "content": {
+       "episodeNumber": 3,
+       "title": "Dry Dock",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90604",
+      "content": {
+       "episodeNumber": 4,
+       "title": "Paper Charts",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90605",
+      "content": {
+       "episodeNumber": 5,
+       "title": "The Storm Glass",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90606",
+      "content": {
+       "episodeNumber": 6,
+       "title": "Loose Ends",
+       "runtime": 43
+      }
+     },
+     {
+      "id": "tse90607",
+      "content": {
+       "episodeNumber": 7,
+       "title": "The Open Sea",
+       "runtime": 43
+      }
+     }
+    ]
+   }
+  ]
+ }
+}

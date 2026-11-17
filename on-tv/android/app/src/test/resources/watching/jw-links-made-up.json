@@ -1,0 +1,85 @@
+{
+ "episode": {
+  "content": {
+   "episodeNumber": 8
+  },
+  "offers": [
+   {
+    "monetizationType": "BUY",
+    "deeplinkURL": "intent://watch.amazon.com/watch?asin=B000000508&time=0&territory=US#Intent;package=com.amazon.amazonvideo.livingroom;scheme=https;end",
+    "standardWebURL": null,
+    "package": {
+     "clearName": "Amazon Video",
+     "technicalName": "amazon"
+    }
+   },
+   {
+    "monetizationType": "FLATRATE",
+    "deeplinkURL": "intent://www.peacocktv.com/deeplink?deeplinkData=%7B%22pvid%22%3A%2200000000-0000-4000-8000-000000000508%22%2C%22type%22%3A%22EPISODE%22%2C%22action%22%3A%22PDP%22%7D#Intent;launchFlags=0x00800000;scheme=https;end",
+    "standardWebURL": null,
+    "package": {
+     "clearName": "Peacock Premium",
+     "technicalName": "peacocktv"
+    }
+   },
+   {
+    "monetizationType": "FLATRATE",
+    "deeplinkURL": "intent://www.peacocktv.com/deeplink?deeplinkData=%7B%22pvid%22%3A%2200000000-0000-4000-8000-000000000508%22%2C%22type%22%3A%22EPISODE%22%2C%22action%22%3A%22PDP%22%7D#Intent;launchFlags=0x00800000;scheme=https;end",
+    "standardWebURL": null,
+    "package": {
+     "clearName": "Peacock Premium Plus",
+     "technicalName": "peacocktvpremium"
+    }
+   },
+   {
+    "monetizationType": "BUY",
+    "deeplinkURL": "intent://tv.apple.com/us/episode/the-long-way-round/umc.cmc.0000000000000000000000508#Intent;launchFlags=0x00800000;scheme=https;end",
+    "standardWebURL": null,
+    "package": {
+     "clearName": "Apple TV Store",
+     "technicalName": "itunes"
+    }
+   }
+  ]
+ },
+ "show": {
+  "offers": [
+   {
+    "monetizationType": "BUY",
+    "deeplinkURL": "intent://watch.amazon.com/watch?asin=B000000001&time=0&territory=US#Intent;package=com.amazon.amazonvideo.livingroom;scheme=https;end",
+    "standardWebURL": null,
+    "package": {
+     "clearName": "Amazon Video",
+     "technicalName": "amazon"
+    }
+   },
+   {
+    "monetizationType": "FLATRATE",
+    "deeplinkURL": "intent://www.peacocktv.com/deeplink?deeplinkData=%7B%22pvid%22%3A%2200000000-0000-4000-8000-000000000001%22%2C%22type%22%3A%22EPISODE%22%2C%22action%22%3A%22PDP%22%7D#Intent;launchFlags=0x00800000;scheme=https;end",
+    "standardWebURL": null,
+    "package": {
+     "clearName": "Peacock Premium",
+     "technicalName": "peacocktv"
+    }
+   },
+   {
+    "monetizationType": "FLATRATE",
+    "deeplinkURL": "intent://www.peacocktv.com/deeplink?deeplinkData=%7B%22pvid%22%3A%2200000000-0000-4000-8000-000000000001%22%2C%22type%22%3A%22EPISODE%22%2C%22action%22%3A%22PDP%22%7D#Intent;launchFlags=0x00800000;scheme=https;end",
+    "standardWebURL": null,
+    "package": {
+     "clearName": "Peacock Premium Plus",
+     "technicalName": "peacocktvpremium"
+    }
+   },
+   {
+    "monetizationType": "BUY",
+    "deeplinkURL": "intent://tv.apple.com/us/show/harbour-lights/umc.cmc.0000000000000000000000001#Intent;launchFlags=0x00800000;scheme=https;end",
+    "standardWebURL": null,
+    "package": {
+     "clearName": "Apple TV Store",
+     "technicalName": "itunes"
+    }
+   }
+  ]
+ }
+}

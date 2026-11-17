@@ -112,8 +112,11 @@ object Now {
         val h = Store.history()
         val out = JSONArray()
         val seen = HashSet<String>()
+        // a title goes by its name without capitals or punctuation; one with no Latin letter in it by its own characters
+        val nameOf = { title: String -> Finder.norm(title).ifEmpty { title.trim().lowercase() } }
         for (it in Watching.items()) {
-            val key = Finder.norm(it.optString("title"))
+            // (an app's own card, "Continue in Hulu", goes by its app: it is not a title)
+            val key = if (it.optString("kind") == "app") "app|" + it.optJSONObject("app")?.optString("package") else nameOf(it.optString("title"))
             if (key.isEmpty() || !seen.add(key)) continue
             out.put(it)
             if (out.length() >= 20) return out
@@ -122,7 +125,7 @@ object Now {
             val it = h.getJSONObject(i)
             val w = it.optString("who").takeIf { s -> s.isNotEmpty() && s != "null" }
             if (whoFilter != null && whoFilter != "both" && w != null && w != whoFilter) continue
-            val key = Finder.norm(it.optString("title"))
+            val key = nameOf(it.optString("title"))
             if (key.isEmpty() || !seen.add(key)) continue
             val pkg = it.optString("package")
             out.put(JSONObject().put("id", "h-$i").put("title", it.optString("title"))

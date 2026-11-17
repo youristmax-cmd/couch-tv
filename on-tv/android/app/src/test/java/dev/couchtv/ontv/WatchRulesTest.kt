@@ -11,9 +11,9 @@ import org.junit.Test
 
 /**
  * Keep watching's rules (WatchRules.kt), on a pretend TV: the looks at media sessions below are
- * made up by hand, in the shape Watching.kt hands them over. Nobody knows yet what Netflix, Hulu
- * and the others really put in their sessions on a Fire TV; GET /api/continue/log is how that
- * gets found out, and these tests are about the rules, not about any one app.
+ * made up by hand, in the shape Watching.kt hands them over: these tests are about the rules, not
+ * about any one app. What two apps were really seen to do on a Fire TV (GET /api/continue/log is
+ * how that gets found out) is in WatchShowsTest.kt.
  */
 class WatchRulesTest {
     private val me = "dev.couchtv.ontv"
@@ -314,12 +314,17 @@ class WatchRulesTest {
         assertEquals(50 * min, it.getLong("duration_ms")); assertEquals(13 * min + 1000, it.getLong("position_ms"))
         assertEquals(0.26, it.getDouble("progress"), 0.001)
         assertTrue(Regex("""\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ""").matches(it.getString("last_played")))
-        // an app the table does not know goes by the name the TV gives it, with no service
-        val t2 = watched(log, hulu, "The Bear", from = t)
-        log.see(seen(hulu, "The Bear", state = paused, at = t2, app = "Hulu"), ex)
+        // an app the table does not know goes by the name the TV gives it, with no service: its package is always there
+        val other = "tv.some.new.app"
+        val t2 = watched(log, other, "The Bear", from = t)
+        log.see(seen(other, "The Bear", state = paused, at = t2, app = "Some New App"), ex)
         log.items(wall0 + t2, false, ex).first().let { c ->
-            assertEquals("Hulu", c.getJSONObject("app").getString("name")); assertTrue(c.getJSONObject("app").isNull("id")); assertTrue(c.isNull("service"))
+            assertEquals("Some New App", c.getJSONObject("app").getString("name")); assertTrue(c.getJSONObject("app").isNull("id")); assertTrue(c.isNull("service"))
+            assertEquals(other, c.getJSONObject("app").getString("package"))
             assertTrue(c.isNull("progress")); assertTrue(c.isNull("position_ms")); assertTrue(c.isNull("duration_ms")) }
+        // and with no name from the TV either, a name is made of the package
+        val t3 = watched(log, "com.example.streamer", "Dune", from = t2)
+        log.items(wall0 + t3, false, ex).first().getJSONObject("app").let { a -> assertEquals("Streamer", a.getString("name")); assertEquals("com.example.streamer", a.getString("package")) }
         // the id is the same every time, and differs from app to app
         assertEquals(WatchRules.id(WatchRules.key(netflix, "Stranger Things")), it.getString("id"))
         assertFalse(WatchRules.id(WatchRules.key(hulu, "Stranger Things")) == it.getString("id"))
@@ -418,8 +423,8 @@ class WatchRulesTest {
 
     @Test fun whatIsNotATitleOrNotWatchedHere() {
         val log = WatchRules.Log(me)
-        // a session with nothing in it (an app's player between two things)
-        log.see(seen(netflix, null, at = 1_000_000), ex).let { assertEquals("no title", it.decision); assertNull(it.entry); assertFalse(it.write) }
+        // a session with nothing in it (an app's player between two things), not playing
+        log.see(seen(netflix, null, state = paused, at = 1_000_000), ex).let { assertEquals("no title", it.decision); assertNull(it.entry); assertFalse(it.write) }
         // music, YouTube, live TV and this app: seen, and left out
         for (p in listOf("com.spotify.tv.android", "com.amazon.firetv.youtube", "com.att.tv", me))
             log.see(seen(p, "Something", at = 1_000_000), ex).let { assertEquals(p, "excluded", it.decision); assertNull(it.entry) }

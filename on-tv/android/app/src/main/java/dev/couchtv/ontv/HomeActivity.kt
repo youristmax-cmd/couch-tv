@@ -198,6 +198,14 @@ class HomeActivity : Activity() {
     private fun iconImage(pkg: String): ByteArray? = AppArt.icon(this, pkg)
 
     companion object {
+        /**
+         * The home was brought back to the front by moving its task (FireHome), which sends no new
+         * intent: tell the page what onNewIntent would have (back to the first tile, settings closed).
+         */
+        fun home() {
+            val a = current?.get() ?: return
+            a.runOnUiThread { a.js("window.tv && tv.home()") }
+        }
         @Volatile private var current: java.lang.ref.WeakReference<HomeActivity>? = null
         /**
          * When the home last came to the front (elapsedRealtime; 0: never). Server.launch asks: a

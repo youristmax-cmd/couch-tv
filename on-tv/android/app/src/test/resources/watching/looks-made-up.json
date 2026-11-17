@@ -1,0 +1,600 @@
+{
+ "looks": [
+  {
+   "time": "2030-01-01T19:22:41.000-08:00",
+   "package": "com.peacock.peacockfiretv",
+   "app": "Peacock TV",
+   "state": "playing",
+   "state_code": 3,
+   "position_ms": 4500,
+   "speed": 1,
+   "actions": 0,
+   "metadata": {},
+   "picture": null,
+   "decision": "no title",
+   "detail": "the session names nothing",
+   "looks": 1
+  },
+  {
+   "time": "2030-01-01T19:22:40.000-08:00",
+   "package": "com.peacock.peacockfiretv",
+   "app": "Peacock TV",
+   "state": "playing",
+   "state_code": 3,
+   "position_ms": 4400,
+   "speed": 1,
+   "actions": 1,
+   "metadata": {
+    "android.media.metadata.DATE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": ""
+    },
+    "android.media.metadata.DISPLAY_DESCRIPTION": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": ""
+    },
+    "android.media.metadata.DISPLAY_TITLE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": "Quillfeather Bay (Trailer)"
+    },
+    "android.media.metadata.DURATION": {
+     "class": "java.lang.Long",
+     "type": "number",
+     "value": 30000
+    },
+    "android.media.metadata.GENRE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": ""
+    },
+    "android.media.metadata.TITLE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": "Quillfeather Bay (Trailer)"
+    }
+   },
+   "picture": null,
+   "decision": "too short",
+   "detail": "the app says it is 30 s long; under 5 minutes is not kept",
+   "read": {
+    "title": "Quillfeather Bay (Trailer)",
+    "episode_title": null,
+    "season": null,
+    "episode": null
+   },
+   "looks": 2
+  },
+  {
+   "time": "2030-01-01T19:22:31.000-08:00",
+   "package": "com.peacock.peacockfiretv",
+   "app": "Peacock TV",
+   "state": "stopped",
+   "state_code": 1,
+   "position_ms": 0,
+   "speed": 1,
+   "actions": 1,
+   "metadata": {
+    "android.media.metadata.DATE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": ""
+    },
+    "android.media.metadata.DISPLAY_DESCRIPTION": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": ""
+    },
+    "android.media.metadata.DISPLAY_TITLE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": "Quillfeather Bay (Trailer)"
+    },
+    "android.media.metadata.DURATION": {
+     "class": "java.lang.Long",
+     "type": "number",
+     "value": 30000
+    },
+    "android.media.metadata.GENRE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": ""
+    },
+    "android.media.metadata.TITLE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": "Quillfeather Bay (Trailer)"
+    }
+   },
+   "picture": null,
+   "decision": "too short",
+   "detail": "the app says it is 30 s long; under 5 minutes is not kept",
+   "read": {
+    "title": "Quillfeather Bay (Trailer)",
+    "episode_title": null,
+    "season": null,
+    "episode": null
+   },
+   "looks": 1
+  },
+  {
+   "time": "2030-01-01T19:21:00.000-08:00",
+   "package": "com.hulu.plus",
+   "app": "Hulu",
+   "state": "playing",
+   "state_code": 3,
+   "position_ms": 540000,
+   "speed": 1,
+   "actions": 0,
+   "metadata": {
+    "android.media.metadata.ALBUM": {
+     "class": "null",
+     "type": "null"
+    },
+    "android.media.metadata.ALBUM_ART": {
+     "class": "null",
+     "type": "null"
+    },
+    "android.media.metadata.ARTIST": {
+     "class": "null",
+     "type": "null"
+    },
+    "android.media.metadata.TITLE": {
+     "class": "null",
+     "type": "null"
+    }
+   },
+   "picture": null,
+   "decision": "no title",
+   "detail": "the session names nothing",
+   "looks": 2
+  },
+  {
+   "time": "2030-01-01T19:17:00.000-08:00",
+   "package": "com.hulu.plus",
+   "app": "Hulu",
+   "state": "none",
+   "state_code": 0,
+   "position_ms": 0,
+   "speed": 1,
+   "actions": 0,
+   "metadata": {},
+   "picture": null,
+   "decision": "no title",
+   "detail": "the session names nothing",
+   "looks": 1
+  },
+  {
+   "time": "2030-01-01T19:16:40.000-08:00",
+   "package": "com.peacock.peacockfiretv",
+   "app": "Peacock TV",
+   "state": "buffering",
+   "state_code": 6,
+   "position_ms": 215000,
+   "speed": 1,
+   "actions": 800,
+   "metadata": {
+    "android.media.metadata.DATE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": "2020-01-01T00:00:00.000Z"
+    },
+    "android.media.metadata.DISPLAY_DESCRIPTION": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": ""
+    },
+    "android.media.metadata.DISPLAY_TITLE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": "The Long Way Round"
+    },
+    "android.media.metadata.DURATION": {
+     "class": "java.lang.Long",
+     "type": "number",
+     "value": 2590000
+    },
+    "android.media.metadata.GENRE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": ""
+    },
+    "android.media.metadata.TITLE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": "The Long Way Round"
+    }
+   },
+   "picture": null,
+   "decision": "counted",
+   "detail": "at 8%",
+   "read": {
+    "title": "The Long Way Round",
+    "episode_title": null,
+    "season": null,
+    "episode": null
+   },
+   "looks": 1
+  },
+  {
+   "time": "2030-01-01T19:16:05.000-08:00",
+   "package": "com.peacock.peacockfiretv",
+   "app": "Peacock TV",
+   "state": "playing",
+   "state_code": 3,
+   "position_ms": 214000,
+   "speed": 1,
+   "actions": 0,
+   "metadata": {},
+   "picture": null,
+   "decision": "no title",
+   "detail": "the session names nothing",
+   "looks": 1
+  },
+  {
+   "time": "2030-01-01T19:16:00.000-08:00",
+   "package": "com.peacock.peacockfiretv",
+   "app": "Peacock TV",
+   "state": "playing",
+   "state_code": 3,
+   "position_ms": 210000,
+   "speed": 1,
+   "actions": 800,
+   "metadata": {
+    "android.media.metadata.DATE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": "2020-01-01T00:00:00.000Z"
+    },
+    "android.media.metadata.DISPLAY_DESCRIPTION": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": ""
+    },
+    "android.media.metadata.DISPLAY_TITLE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": "The Long Way Round"
+    },
+    "android.media.metadata.DURATION": {
+     "class": "java.lang.Long",
+     "type": "number",
+     "value": 2590000
+    },
+    "android.media.metadata.GENRE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": ""
+    },
+    "android.media.metadata.TITLE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": "The Long Way Round"
+    }
+   },
+   "picture": null,
+   "decision": "counted",
+   "detail": "at 8%",
+   "read": {
+    "title": "The Long Way Round",
+    "episode_title": null,
+    "season": null,
+    "episode": null
+   },
+   "looks": 17
+  },
+  {
+   "time": "2030-01-01T19:14:30.000-08:00",
+   "package": "com.peacock.peacockfiretv",
+   "app": "Peacock TV",
+   "state": "playing",
+   "state_code": 3,
+   "position_ms": 126000,
+   "speed": 1,
+   "actions": 800,
+   "metadata": {
+    "android.media.metadata.DATE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": "2020-01-01T00:00:00.000Z"
+    },
+    "android.media.metadata.DISPLAY_DESCRIPTION": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": ""
+    },
+    "android.media.metadata.DISPLAY_TITLE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": "The Long Way Round"
+    },
+    "android.media.metadata.DURATION": {
+     "class": "java.lang.Long",
+     "type": "number",
+     "value": 2590000
+    },
+    "android.media.metadata.GENRE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": ""
+    },
+    "android.media.metadata.TITLE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": "The Long Way Round"
+    }
+   },
+   "picture": null,
+   "decision": "not yet",
+   "detail": "played 116 s of the 120 s it takes",
+   "read": {
+    "title": "The Long Way Round",
+    "episode_title": null,
+    "season": null,
+    "episode": null
+   },
+   "looks": 24
+  },
+  {
+   "time": "2030-01-01T19:12:25.000-08:00",
+   "package": "com.peacock.peacockfiretv",
+   "app": "Peacock TV",
+   "state": "paused",
+   "state_code": 2,
+   "position_ms": 12000,
+   "speed": 1,
+   "actions": 800,
+   "metadata": {
+    "android.media.metadata.DATE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": "2020-01-01T00:00:00.000Z"
+    },
+    "android.media.metadata.DISPLAY_DESCRIPTION": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": ""
+    },
+    "android.media.metadata.DISPLAY_TITLE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": "The Long Way Round"
+    },
+    "android.media.metadata.DURATION": {
+     "class": "java.lang.Long",
+     "type": "number",
+     "value": 2590000
+    },
+    "android.media.metadata.GENRE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": ""
+    },
+    "android.media.metadata.TITLE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": "The Long Way Round"
+    }
+   },
+   "picture": null,
+   "decision": "not yet",
+   "detail": "played 3 s of the 120 s it takes",
+   "read": {
+    "title": "The Long Way Round",
+    "episode_title": null,
+    "season": null,
+    "episode": null
+   },
+   "looks": 1
+  },
+  {
+   "time": "2030-01-01T19:12:17.000-08:00",
+   "package": "com.peacock.peacockfiretv",
+   "app": "Peacock TV",
+   "state": "stopped",
+   "state_code": 1,
+   "position_ms": 0,
+   "speed": 1,
+   "actions": 800,
+   "metadata": {
+    "android.media.metadata.DATE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": "2020-01-01T00:00:00.000Z"
+    },
+    "android.media.metadata.DISPLAY_DESCRIPTION": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": ""
+    },
+    "android.media.metadata.DISPLAY_TITLE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": "The Long Way Round"
+    },
+    "android.media.metadata.DURATION": {
+     "class": "java.lang.Long",
+     "type": "number",
+     "value": 2590000
+    },
+    "android.media.metadata.GENRE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": ""
+    },
+    "android.media.metadata.TITLE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": "The Long Way Round"
+    }
+   },
+   "picture": null,
+   "decision": "not yet",
+   "detail": "played 0 s of the 120 s it takes",
+   "read": {
+    "title": "The Long Way Round",
+    "episode_title": null,
+    "season": null,
+    "episode": null
+   },
+   "looks": 1
+  },
+  {
+   "time": "2030-01-01T19:12:16.900-08:00",
+   "package": "com.peacock.peacockfiretv",
+   "app": "Peacock TV",
+   "state": "stopped",
+   "state_code": 1,
+   "position_ms": 0,
+   "speed": 1,
+   "actions": 0,
+   "metadata": {},
+   "picture": null,
+   "decision": "no title",
+   "detail": "the session names nothing",
+   "looks": 2
+  },
+  {
+   "time": "2030-01-01T19:12:10.000-08:00",
+   "package": "com.peacock.peacockfiretv",
+   "app": "Peacock TV",
+   "state": "buffering",
+   "state_code": 6,
+   "position_ms": 0,
+   "speed": 1,
+   "actions": 1,
+   "metadata": {
+    "android.media.metadata.DATE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": ""
+    },
+    "android.media.metadata.DISPLAY_DESCRIPTION": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": ""
+    },
+    "android.media.metadata.DISPLAY_TITLE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": "Harbour Lights (Trailer)"
+    },
+    "android.media.metadata.DURATION": {
+     "class": "java.lang.Long",
+     "type": "number",
+     "value": 150000
+    },
+    "android.media.metadata.GENRE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": ""
+    },
+    "android.media.metadata.TITLE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": "Harbour Lights (Trailer)"
+    }
+   },
+   "picture": null,
+   "decision": "too short",
+   "detail": "the app says it is 150 s long; under 5 minutes is not kept",
+   "read": {
+    "title": "Harbour Lights (Trailer)",
+    "episode_title": null,
+    "season": null,
+    "episode": null
+   },
+   "looks": 1
+  },
+  {
+   "time": "2030-01-01T19:12:09.500-08:00",
+   "package": "com.peacock.peacockfiretv",
+   "app": "Peacock TV",
+   "state": "stopped",
+   "state_code": 1,
+   "position_ms": 0,
+   "speed": 1,
+   "actions": 1,
+   "metadata": {
+    "android.media.metadata.DATE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": ""
+    },
+    "android.media.metadata.DISPLAY_DESCRIPTION": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": ""
+    },
+    "android.media.metadata.DISPLAY_TITLE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": "Harbour Lights (Trailer)"
+    },
+    "android.media.metadata.DURATION": {
+     "class": "java.lang.Long",
+     "type": "number",
+     "value": 150000
+    },
+    "android.media.metadata.GENRE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": ""
+    },
+    "android.media.metadata.TITLE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": "Harbour Lights (Trailer)"
+    }
+   },
+   "picture": null,
+   "decision": "too short",
+   "detail": "the app says it is 150 s long; under 5 minutes is not kept",
+   "read": {
+    "title": "Harbour Lights (Trailer)",
+    "episode_title": null,
+    "season": null,
+    "episode": null
+   },
+   "looks": 1
+  },
+  {
+   "time": "2030-01-01T19:11:30.000-08:00",
+   "package": "com.amazon.firetv.youtube",
+   "app": "YouTube",
+   "state": "playing",
+   "state_code": 3,
+   "position_ms": 7,
+   "speed": 1,
+   "actions": 4,
+   "metadata": {
+    "android.media.metadata.ALBUM": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": ""
+    },
+    "android.media.metadata.ARTIST": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": ""
+    },
+    "android.media.metadata.DURATION": {
+     "class": "java.lang.Long",
+     "type": "number",
+     "value": 0
+    },
+    "android.media.metadata.TITLE": {
+     "class": "java.lang.String",
+     "type": "text",
+     "value": ""
+    }
+   },
+   "picture": null,
+   "decision": "excluded",
+   "detail": "this app is left out",
+   "looks": 2
+  }
+ ]
+}

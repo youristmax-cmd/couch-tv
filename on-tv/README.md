@@ -200,9 +200,12 @@ ESPN out, take the NBA team out of the list; to switch it all off, save an empty
 ## Keep watching (optional)
 
 Out of the box the home's Keep watching row holds what was started through Couch TV's own search.
-It can also hold what you watched by opening Netflix, Hulu or any other app yourself: the title,
-the episode and how far in you are, as far as the app says them, with the app's own picture. OK on
-a card opens that app. [docs/KEEP-WATCHING.md](../docs/KEEP-WATCHING.md) has all of it.
+It can also hold what you watched by opening Netflix, Peacock or any other app yourself: the
+title, the episode and how far in you are, as far as the app lets them be known. OK on a card
+opens that app. [docs/KEEP-WATCHING.md](../docs/KEEP-WATCHING.md) has all of it, with what each
+app has been seen to give so far. Apps differ a great deal: on a Fire TV, Peacock names only the
+episode (the show is worked out from the preview it plays just before, if you switch looking up
+on), and Hulu names nothing at all (it gets one card, "Continue in Hulu").
 
 It reads the few words each app publishes about what it is playing (its "media session"), and
 Android only allows that to an app you have let in as a notification listener. Couch TV's listener
@@ -213,12 +216,13 @@ a computer:
 adb shell cmd notification allow_listener dev.couchtv.ontv/dev.couchtv.ontv.MediaAccess
 ```
 
-(`disallow_listener` takes it back.) The watch log stays on the TV. One thing can send a title's
-name out, and it is off unless you switch it on: **Look up pictures** on the setup page
+(`disallow_listener` takes it back.) The watch log stays on the TV. One thing can send names out,
+and it is off unless you switch it on: **Look up shows and pictures** on the setup page
 (`http://<tv-ip>:5400/setup`, **Keep watching**) asks JustWatch for a picture when the app gave
-none. Music, YouTube and live TV apps are left out. This part has been tested on a computer only,
-not yet on a TV: what each app really publishes is still to be seen, and
-`http://<tv-ip>:5400/api/continue/log` on a paired phone shows it.
+none, and for the show when the app names only the episode. Music, YouTube and live TV apps are
+left out. It has run on one Fire TV so far (November 2026); what any other app publishes is still
+to be seen, and `http://<tv-ip>:5400/api/continue/log` on a paired phone shows it. OK on a card
+opens the very episode only in an app that accepts links, and on a Fire TV Peacock does not.
 
 ## Weather
 
@@ -292,7 +296,10 @@ out every computer, so reconnect yours afterwards).
   sessions. `MediaAccess` is a notification listener that reads no notifications: being allowed as
   one is what lets `Watching.kt` see the sessions. `Watching.kt` listens, keeps the apps' pictures
   and stores the log; `WatchRules.kt` is every rule (which apps, what counts as watched, season and
-  episode from the words, the card's shape), with no Android in it, so it is tested on a computer.
+  episode from the words, the card's shape, which shows to try for an app that names only the
+  episode, the one card for an app that names nothing), with no Android in it, so it is tested on
+  a computer. `ShowRules.kt` reads JustWatch's answers about a show (its episode list, asked for
+  without the offers, and the offers of one episode), tested the same way.
 - `Weather.kt` and `WeatherRules.kt`: the weather. `Weather.kt` asks Open-Meteo, and the US
   National Weather Service when Open-Meteo does not answer; `WeatherRules.kt` turns either answer
   into the home's reading (the Weather Service's words into Open-Meteo's codes), tested on a
@@ -312,5 +319,6 @@ with the real "Allow debugging?" dialog, keys, launch, deep link, volume, power,
 the same JDK and Android SDK as a build) runs the score bugs' rules on the computer, with no TV and
 no emulator, against answers recorded from MLB's Stats API and from ESPN's scoreboard
 (`android/app/src/test/`). The same run checks the rules for sending a channel link, the Keep
-watching rules (against made-up sessions: no app's real session has been recorded yet) and the
-weather's (against answers recorded from `api.weather.gov`).
+watching rules (against made-up sessions, and against the looks recorded from a Fire TV with
+Peacock, Hulu and YouTube on it, and JustWatch's answers for the show in them) and the weather's
+(against answers recorded from `api.weather.gov`).

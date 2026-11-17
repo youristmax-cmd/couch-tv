@@ -154,9 +154,7 @@ object Tv {
      * first (needs ADB). Falls back to a plain Android intent without ADB.
      */
     fun startUri(uriIn: String, pkg: String? = null, cold: Boolean = false, component: String? = null): String {
-        var uri = uriIn.replace("'", "")
-        // JustWatch sometimes names an inner screen that newer app versions no longer have.
-        uri = Regex("component=([^/;]+)/[^;]+").replace(uri) { "package=${it.groupValues[1]}" }
+        val uri = prepared(uriIn, pkg)
         // component ("package/class"): the link goes to that one screen of the app and nowhere else
         // (a DirecTV channel link is taken by its first screen). Only names made of plain characters.
         val comp = component?.takeIf { Regex("[A-Za-z0-9_.$]+/[A-Za-z0-9_.$]+").matches(it) }
@@ -174,6 +172,34 @@ object Tv {
         }
         start(i)
         return "intent"
+    }
+
+    /**
+     * Would this app take this link? Asked of Android itself (the package manager) before a link is
+     * sent, because an app may accept none: Peacock's Fire TV app has no link filter at all (seen
+     * 16 November 2026: "unable to resolve Intent"; Fire TV apps are opened on a title by Amazon's
+     * own launcher, through a contract nobody else can use). A link the app cannot take is not
+     * sent, to that app or to anything else: the caller opens the app instead.
+     */
+    fun canOpen(uriIn: String, pkg: String?): Boolean = try {
+        val uri = prepared(uriIn, pkg)
+        val i = if (uri.startsWith("intent:")) Intent.parseUri(uri, Intent.URI_INTENT_SCHEME)
+        else Intent(Intent.ACTION_VIEW, android.net.Uri.parse(uri)).apply { pkg?.let { setPackage(it) } }
+        // only a screen of the app the link is for counts: a link that names no app is never sent on the chance of a browser
+        val target = i.`package` ?: i.component?.packageName
+        target != null && ctx.packageManager.queryIntentActivities(i, PackageManager.MATCH_DEFAULT_ONLY).any { it.activityInfo?.packageName == target }
+    } catch (e: Exception) { false }
+
+    /** A link as it is sent (startUri) and as it is asked about (canOpen): the same in both. */
+    private fun prepared(uriIn: String, pkg: String?): String {
+        var uri = uriIn.replace("'", "")
+        // JustWatch sometimes names an inner screen that newer app versions no longer have.
+        uri = Regex("component=([^/;]+)/[^;]+").replace(uri) { "package=${it.groupValues[1]}" }
+        // Many of its links name no app at all and are a plain https address inside an intent: (Peacock,
+        // Disney+, HBO Max). Sent like that, the TV may hand it to a browser or to nothing: it goes to
+        // the app it is meant for, as an https link given with pkg always has.
+        if (pkg != null) uri = LinkRules.aim(uri, pkg)
+        return uri
     }
 
     /** The screen an app starts with (its TV launcher entry), as "package/class". Null when it has none. */

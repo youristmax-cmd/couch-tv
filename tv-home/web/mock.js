@@ -166,6 +166,15 @@
     { id: "m4", title: "Fisk", season: 3, episode: 1, app: app("abc-iview", "ABC iview", "au.net.abc.iview"), backdrop: jw("backdrop/301043232/s1440/fisk"), progress: 0.55 },
     { id: "m5", title: "Slow Horses", season: 4, episode: 3, app: app("apple-tv", "Apple TV", "com.apple.atve.androidtv.appletv"), backdrop: jw("backdrop/272750278/s1440/slow-horses"), progress: 0.3 }
   ];
+  // ?kwtest=1: the kinds of card the on-TV app sends from what was watched (a show it worked out
+  // from an episode, an episode with no picture, an app that names nothing). ?shows=N: the first N.
+  if (/[?&]kwtest=1/.test(q)) shows = [
+    { id: "w-1", title: "The Lighthouse Keepers of Harbour Bay", season: 5, episode: 8, episode_title: "The Long Way Round", app: app("peacock", "Peacock", "com.peacock.peacockfiretv"), backdrop: shows[0].backdrop, progress: 0.08, kind: "continue" },
+    { id: "w-2", title: "An episode with no picture", app: app("peacock", "Peacock", "com.peacock.peacockfiretv"), progress: 0.4, kind: "continue" },
+    { id: "w-3", title: "Hulu", app: app("hulu", "Hulu", "com.hulu.plus"), kind: "app" }
+  ];
+  var nShows = (q.match(/[?&]shows=(\d+)/) || [])[1];
+  if (nShows) shows = shows.slice(0, +nShows);
   var screens = [{ id: "desktop", name: "Desktop", kind: "moonlight", ready: true, note: "" }];
   var people = function () {
     return store.get("api.people") || cfg.people || [{ id: "person1", name: "Person 1" }, { id: "person2", name: "Person 2" }];

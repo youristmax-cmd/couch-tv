@@ -368,7 +368,7 @@ watching**) or with `POST /api/settings` (`{"watching": {...}}`).
 
 | Key | What it does |
 |---|---|
-| `lookup` [`false`] | `true`: a title whose app gave no picture is looked up on JustWatch for a poster and a backdrop, and OK on its card opens the title in its app when JustWatch lists it there. **This sends the title's name, and `country`, to JustWatch**, so it is off until you switch it on. Asked once for a title; not again for a day if nothing came back. `false`: nothing about what was watched leaves the TV. |
+| `lookup` [`false`] | `true`: JustWatch is asked about what was watched. A title whose app gave no picture gets a poster and a backdrop. A title from an app that names only the episode (Peacock) gets its show, season and episode, worked out from the preview that app played just before, or from the show already being watched in it. And OK on a card opens the title in its app when JustWatch has a link for it there and the app accepts it. **This sends names to JustWatch, with `country`: the title's, and those of previews seen just before it**, so it is off until you switch it on. Each is asked once; not again for a day if nothing came back. `false`: nothing about what was watched leaves the TV. |
 | `exclude` [music and voice players, YouTube, live TV: Spotify, Amazon Music, Alexa's players, the YouTube apps, DirecTV] | Android package names whose media sessions are ignored. A list you send replaces the whole built-in list, so include what you still want left out. `GET /api/settings` shows the list in use. |
 
 ## Settings made on the TV (Home settings)

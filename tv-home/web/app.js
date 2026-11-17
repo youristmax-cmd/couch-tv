@@ -910,12 +910,18 @@
       // lock screen notifications: the first three shows as glass cards
       data.shows = data.shows.slice(0, 3);
       track.innerHTML = data.shows.map(function (it) {
-        var art = it.backdrop || it.poster, pkg = it.app && it.app.package;
-        var ep = it.season && it.episode ? "S" + it.season + " E" + it.episode : (it.episode_title || "");
+        var art = it.backdrop || it.poster, pkg = it.app && it.app.package, icon = pkg && iconUrl(pkg);
+        // an app that plays but names nothing (the on-TV app sends one card for the app itself)
+        var appOnly = it.kind === "app";
+        var name = appOnly ? t("keep_app", { app: it.app ? it.app.name : it.title }) : it.title;
+        var ep = appOnly ? "" : it.season && it.episode ? "S" + it.season + " E" + it.episode + (it.episode_title ? "  ·  " + it.episode_title : "") : (it.episode_title || "");
+        // the picture sits over the app's icon: no picture, or one that does not load, and the icon shows
         return '<div class="tile ncard">' +
-          (art ? '<img class="thumb" src="' + esc(art) + '" alt="" decoding="async">' : '<span class="thumb none"></span>') +
-          '<div class="t"><div class="nap">' + (pkg && iconUrl(pkg) ? '<img src="' + esc(iconUrl(pkg)) + '" alt="" onerror="this.remove()">' : "") +
-          esc(it.app ? it.app.name : "") + "</div><b>" + esc(it.title) + "</b>" + (ep ? "<i>" + esc(ep) + "</i>" : "") +
+          '<span class="thumb">' + (icon ? '<img class="ic" src="' + esc(icon) + '" alt="' + esc(it.app ? it.app.name : "") + '" onerror="this.remove()">' : "") +
+          (art ? '<img class="art" src="' + esc(art) + '" alt="" decoding="async" onerror="this.remove()">' : "") +
+          // which app it is in: a small badge on the picture's corner (with no picture the icon is the picture)
+          (art && icon ? '<img class="by" src="' + esc(icon) + '" alt="" onerror="this.remove()">' : "") + "</span>" +
+          '<div class="t"><b>' + esc(name) + "</b>" + (ep ? "<i>" + esc(ep) + "</i>" : "") +
           (it.progress ? '<span class="nbar"><i style="width:' + Math.round(it.progress * 100) + '%"></i></span>' : "") + "</div></div>";
       }).join("");
       shelfEls = Array.prototype.slice.call(track.children);
