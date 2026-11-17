@@ -1,0 +1,100 @@
+{
+ "type": "Feature",
+ "properties": {
+  "units": "us",
+  "generatedAt": "2026-11-17T02:07:13+00:00",
+  "updateTime": "2026-11-16T22:55:33+00:00",
+  "periods": [
+   {
+    "number": 1,
+    "name": "Tonight",
+    "startTime": "2026-11-16T18:00:00-08:00",
+    "endTime": "2026-11-17T06:00:00-08:00",
+    "isDaytime": false,
+    "temperature": 42,
+    "temperatureUnit": "F",
+    "probabilityOfPrecipitation": {
+     "unitCode": "wmoUnit:percent",
+     "value": 12
+    },
+    "icon": "https://api.weather.gov/icons/land/night/rain/sct?size=medium",
+    "shortForecast": "Slight Chance Light Rain then Partly Cloudy"
+   },
+   {
+    "number": 2,
+    "name": "Tuesday",
+    "startTime": "2026-11-17T06:00:00-08:00",
+    "endTime": "2026-11-17T18:00:00-08:00",
+    "isDaytime": true,
+    "temperature": 50,
+    "temperatureUnit": "F",
+    "probabilityOfPrecipitation": {
+     "unitCode": "wmoUnit:percent",
+     "value": 2
+    },
+    "icon": "https://api.weather.gov/icons/land/day/sct?size=medium",
+    "shortForecast": "Mostly Sunny"
+   },
+   {
+    "number": 3,
+    "name": "Tuesday Night",
+    "startTime": "2026-11-17T18:00:00-08:00",
+    "endTime": "2026-11-18T06:00:00-08:00",
+    "isDaytime": false,
+    "temperature": 41,
+    "temperatureUnit": "F",
+    "probabilityOfPrecipitation": {
+     "unitCode": "wmoUnit:percent",
+     "value": 11
+    },
+    "icon": "https://api.weather.gov/icons/land/night/sct/rain?size=medium",
+    "shortForecast": "Partly Cloudy then Slight Chance Light Rain"
+   },
+   {
+    "number": 4,
+    "name": "Wednesday",
+    "startTime": "2026-11-18T06:00:00-08:00",
+    "endTime": "2026-11-18T18:00:00-08:00",
+    "isDaytime": true,
+    "temperature": 49,
+    "temperatureUnit": "F",
+    "probabilityOfPrecipitation": {
+     "unitCode": "wmoUnit:percent",
+     "value": 30
+    },
+    "icon": "https://api.weather.gov/icons/land/day/rain,30?size=medium",
+    "shortForecast": "Slight Chance Light Rain"
+   },
+   {
+    "number": 5,
+    "name": "Wednesday Night",
+    "startTime": "2026-11-18T18:00:00-08:00",
+    "endTime": "2026-11-19T06:00:00-08:00",
+    "isDaytime": false,
+    "temperature": 41,
+    "temperatureUnit": "F",
+    "probabilityOfPrecipitation": {
+     "unitCode": "wmoUnit:percent",
+     "value": 11
+    },
+    "icon": "https://api.weather.gov/icons/land/night/rain/bkn?size=medium",
+    "shortForecast": "Slight Chance Light Rain then Mostly Cloudy"
+   },
+   {
+    "number": 6,
+    "name": "Thursday",
+    "startTime": "2026-11-19T06:00:00-08:00",
+    "endTime": "2026-11-19T18:00:00-08:00",
+    "isDaytime": true,
+    "temperature": 49,
+    "temperatureUnit": "F",
+    "probabilityOfPrecipitation": {
+     "unitCode": "wmoUnit:percent",
+     "value": 1
+    },
+    "icon": "https://api.weather.gov/icons/land/day/sct?size=medium",
+    "shortForecast": "Mostly Sunny"
+   }
+  ]
+ }
+}

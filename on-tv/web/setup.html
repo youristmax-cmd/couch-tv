@@ -98,6 +98,15 @@
   </section>
 
   <section class="card">
+    <h2>Keep watching (optional)</h2>
+    <p>What you watched in Netflix and the other apps, on the home's Keep watching row. The list stays on the TV. It needs one permission, given once from a computer: docs/KEEP-WATCHING.md.</p>
+    <p class="status" id="watch-status">Checking…</p>
+    <label class="check"><input type="checkbox" id="watch-lookup"> Look up pictures when an app gives none. This sends the title's name to JustWatch.</label>
+    <div class="row"><button class="go" id="watch-save">Save</button><button id="watch-forget">Forget what was watched</button></div>
+    <div class="msg" id="watch-msg" role="status"></div>
+  </section>
+
+  <section class="card">
     <h2>Phones</h2>
     <p id="phones"></p>
     <button id="forget">Forget every phone</button>
@@ -126,6 +135,11 @@
       $('phones').textContent = j.phones + (j.phones === 1 ? ' phone is' : ' phones are') + ' paired with this TV.';
       // not while it is being typed in
       if (j.scores && document.activeElement !== $('scores')) $('scores').value = JSON.stringify(j.scores, null, 2);
+      if (j.watching) {
+        $('watch-status').className = 'status ' + (j.watching.access ? 'ok' : 'bad');
+        $('watch-status').textContent = j.watching.access ? 'Allowed. The TV is keeping its list.' : 'Not allowed yet, so nothing is kept.';
+        $('watch-lookup').checked = !!j.watching.lookup;
+      }
       showAdb(j.adb);
       if (j.fire_remote) showFire(j.fire_remote);
       // Android 13+ (most Google TVs): pairing first, 5555 second. Older TVs: the other way round.
@@ -192,6 +206,15 @@
     if (!scores || typeof scores !== 'object' || Array.isArray(scores)) { $('scores-msg').textContent = 'It must be an object with teams, channels and tv_app.'; return; }
     api('POST', '/api/settings', { scores: scores }).then(function () { $('scores-msg').textContent = 'Saved.'; $('scores').blur(); load(); })
       .catch(function (e) { $('scores-msg').textContent = e.message; });
+  };
+  $('watch-save').onclick = function () {
+    api('POST', '/api/settings', { watching: { lookup: $('watch-lookup').checked } }).then(function () { $('watch-msg').textContent = 'Saved.'; load(); })
+      .catch(function (e) { $('watch-msg').textContent = e.message; });
+  };
+  $('watch-forget').onclick = function () {
+    if (!confirm('Empty the list of what was watched on this TV?')) return;
+    api('POST', '/api/continue/forget', { all: true }).then(function () { $('watch-msg').textContent = 'Forgotten.'; })
+      .catch(function (e) { $('watch-msg').textContent = e.message; });
   };
   $('forget').onclick = function () {
     if (!confirm('Every phone, including this one, will need the code from the TV again.')) return;

@@ -102,6 +102,9 @@ class Server(private val ctx: Context, port: Int) : NanoWSD(port) {
         // A team's or league's logo from the app's own cache, for the home's score bugs. No token, as
         // for /icon/: an <img> cannot send one, and these are public pictures under names the app made.
         if (m == Method.GET && path.startsWith("/api/scores/logo/")) return scoreLogo(path.removePrefix("/api/scores/logo/"))
+        // A Keep watching card's picture: the app's own, as a copy kept on the TV (Watching.kt). No
+        // token for the same reason; only names of the app's own making are served.
+        if (m == Method.GET && path.startsWith("/api/continue/art/")) return watchArt(path.removePrefix("/api/continue/art/"))
         if (!authed(s)) return json(401, err("pair this phone first: open this page on your phone and type the code from the TV"))
 
         val q = { k: String -> s.parameters[k]?.firstOrNull() }
@@ -143,9 +146,30 @@ class Server(private val ctx: Context, port: Int) : NanoWSD(port) {
                 json(200, Ask.ask(b.optString("text").ifEmpty { throw ApiError(400, "text is required") }, b.optString("who").ifEmpty { Now.who }))
             }
             "GET /api/recs" -> json(200, ok().put("updated", Now.iso()).put("continue", Now.continueItems(q("who"))).put("picks", JSONArray()))
-            "GET /api/continue" -> json(200, ok().put("items", Now.continueItems(q("who"))))
+            // Keep watching: what was really watched on the TV (other apps' media sessions, where the
+            // owner has allowed that), then what was started through Couch TV's own search. "watching"
+            // says whether that access is there, so an empty row can be explained.
+            "GET /api/continue" -> json(200, ok().put("items", Now.continueItems(q("who"))).put("watching", Watching.status()))
+            // The last 60 raw looks at other apps' media sessions, and what the rules made of each:
+            // how to find out what each app really reports. It stays on the TV; this only shows it.
+            "GET /api/continue/log" -> json(200, ok().put("watching", Watching.status()).put("looks", Watching.looks()))
+            // {"id": "w-..." or "h-..."} takes one card away; {"all": true} empties the watch log
+            "POST /api/continue/forget" -> {
+                val b = body(s)
+                val id = b.optString("id")
+                when {
+                    b.optBoolean("all") -> Watching.forgetAll()
+                    id.startsWith("w-") -> if (!Watching.forget(id)) throw ApiError(404, "not in keep watching")
+                    id.startsWith("h-") -> if (!Store.removeHistory(id.removePrefix("h-").toIntOrNull() ?: -1)) throw ApiError(404, "not in keep watching")
+                    else -> throw ApiError(400, "id, or all, is required")
+                }
+                json(200, ok().put("items", Now.continueItems(q("who"))))
+            }
             "POST /api/continue/open" -> {
                 val b = body(s)
+                // a card from the watch log: Finder's link for that app when looking up is allowed and
+                // it has one, else the app is opened (Watching.open)
+                if (b.optString("id").startsWith("w-")) return json(200, ok(Watching.open(b.optString("id"), b.optString("who").ifEmpty { null })))
                 val idx = b.optString("id").removePrefix("h-").toIntOrNull() ?: throw ApiError(400, "id is required")
                 val h = Store.history()
                 if (idx !in 0 until h.length()) throw ApiError(404, "not in keep watching")
@@ -412,6 +436,9 @@ class Server(private val ctx: Context, port: Int) : NanoWSD(port) {
         .put("fire_remote", JSONObject(FireRemote.status()))
         // home.scores: the score bugs' teams, channel table and TV app (docs/SCORES.md)
         .put("scores", Scores.config())
+        // Keep watching: which apps are left out, whether titles may be looked up outside, and
+        // whether the access to other apps' media sessions is there (docs/KEEP-WATCHING.md)
+        .put("watching", Watching.config())
 
     /** {"people": [...]} replaces the list; {"order": [ids]} only reorders it. */
     private fun savePeople(b: JSONObject) {
@@ -438,6 +465,8 @@ class Server(private val ctx: Context, port: Int) : NanoWSD(port) {
         // The score bugs' settings (docs/SCORES.md), as "scores" or the way config.json writes them,
         // "home": {"scores": ...}. First, as a wrong shape is refused before anything else is saved.
         (b.optJSONObject("scores") ?: b.optJSONObject("home")?.optJSONObject("scores"))?.let { Scores.setConfig(it) }
+        // Keep watching's two settings, {"watching": {"exclude": [...], "lookup": false}}: the same way
+        b.optJSONObject("watching")?.let { Watching.setConfig(it) }
         b.optJSONObject("settings")?.let {
             if (it.toString().length > 32_000) throw ApiError(413, "settings are too big")
             Store.writeJson("home-settings.json", it)
@@ -601,6 +630,16 @@ class Server(private val ctx: Context, port: Int) : NanoWSD(port) {
      * browser for a week. The last two headers are for a picture someone else drew: it is only ever
      * a picture here, even if opened as a page.
      */
+    /** A Keep watching card's picture: a JPEG this app made from the picture an app's media session carried. */
+    private fun watchArt(file: String): Response {
+        val f = Watching.artFile(file) ?: return json(404, err("no such picture"))
+        return newFixedLengthResponse(Response.Status.OK, "image/jpeg", java.io.FileInputStream(f), f.length()).apply {
+            // the address carries the time the picture was kept (?v=), so a new one has a new address
+            addHeader("Cache-Control", "max-age=604800")
+            addHeader("X-Content-Type-Options", "nosniff")
+        }
+    }
+
     private fun scoreLogo(file: String): Response {
         val f = Scores.logoFile(file) ?: return json(404, err("no such logo"))
         // MLB's are drawings (SVG), ESPN's are PNG: the app checked which when it kept the file

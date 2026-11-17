@@ -1,0 +1,17 @@
+{
+ "type": "Feature",
+ "properties": {
+  "stationId": "FHMC1",
+  "stationName": "LOS ANGELES DOWNTOWN",
+  "timestamp": "2026-11-17T03:50:00+00:00",
+  "textDescription": "",
+  "icon": null,
+  "presentWeather": [],
+  "temperature": {
+   "unitCode": "wmoUnit:degC",
+   "value": 18.79,
+   "qualityControl": "V"
+  },
+  "cloudLayers": []
+ }
+}

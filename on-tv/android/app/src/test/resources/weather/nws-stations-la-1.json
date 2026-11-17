@@ -1,0 +1,17 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "@id": "https://api.weather.gov/stations/FHMC1",
+    "stationIdentifier": "FHMC1",
+    "name": "LOS ANGELES DOWNTOWN",
+    "timeZone": "America/Los_Angeles"
+   }
+  }
+ ],
+ "observationStations": [
+  "https://api.weather.gov/stations/FHMC1"
+ ]
+}

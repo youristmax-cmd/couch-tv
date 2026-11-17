@@ -30,6 +30,10 @@ class App : Application() {
         runCatching { Security.insertProviderAt(org.conscrypt.Conscrypt.newProvider(), 1) }
         Store.init(this); Adb.init(this); Tv.init(this)
         instance = this
+        // Keep watching: reads its log back and listens to other apps' media sessions, where the TV's
+        // owner has allowed that (MediaAccess). Here and not in the service, because Android may start
+        // this app just to bind that listener, before anything else of it runs.
+        Watching.start()
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityResumed(a: Activity) { resumed++ }
             override fun onActivityPaused(a: Activity) { resumed-- }

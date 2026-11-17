@@ -386,6 +386,9 @@ Claude's picks plus continue watching. Optional `?who=person1`. Fast: it returns
 - Resume with `POST /api/continue/open {"id": "h-0"}`. It reopens the show in its app; the app
   itself picks up where you left off (Netflix, Stan, iview and the rest remember the position).
   Response is the same as `POST /api/play`.
+- The on-TV app (option C) can also fill this row from what was really watched on the TV, with
+  `"source": "tv"`, a real `progress` and ids that start `w-`: "Keep watching from the TV", at
+  the end of this file.
 
 ### `POST /api/sleep` and `GET /api/sleep`
 Sleep timer, kept on the bridge so it still fires when the phone locks.
@@ -655,6 +658,11 @@ Every title object (find result, play, playing, continue, picks) carries `poster
 URLs. Credit "Data from JustWatch" somewhere quiet (their terms).
 
 ## Change notes
+- On-TV app: Keep watching from what was really watched on the TV (other apps' media sessions):
+  `w-` items and `watching` in `GET /api/continue`, `GET /api/continue/log`,
+  `POST /api/continue/forget`, `GET /api/continue/art/<file>`, and `watching` in its
+  `GET|POST /api/settings`. Its `GET /api/weather` gained `source` (`open-meteo`, or `nws` when
+  the US National Weather Service stood in). Both described at the end of this file.
 - On-TV app: the score bugs' NBA games (`nba` in a game of `GET /api/scores`, PNG logos), from
   ESPN's public scoreboard.
 - On-TV app: `GET /api/scores` and `GET /api/scores/logo/<file>` (game-day score bugs, MLB), and
@@ -790,3 +798,115 @@ The settings are `scores` in the on-TV app's `GET|POST /api/settings`:
 "channels": {"SportsNet LA": {"number":
 690, "link": "", "aliases": ["SNLA"], "app": ""}}, "tv_app": "com.att.tv"}}` (also accepted as
 `{"home": {"scores": {...}}}`). Only the keys sent are changed; `400` for a wrong shape.
+
+### Keep watching from the TV: `GET /api/continue` (on-TV app only)
+The on-TV app's `GET /api/continue` puts first what was really watched on the TV, read from the
+other apps' media sessions (docs/KEEP-WATCHING.md), and after it the items from its own search
+history (`h-` ids, `"source": "bridge"`, as above). A title in both is given once. 20 items at
+most. `?who=` only filters the search-history items: the TV cannot tell who watched something, so
+the `w-` items go to everyone.
+```json
+{"ok": true,
+ "watching": {"access": true, "since": "2030-01-01T10:00:00.000-08:00", "titles": 7, "lookup": false},
+ "items": [
+  {"id": "w-3fa9c01b77d2", "title": "Stranger Things", "episode_title": "The Weirdo on Maple Street",
+   "season": 1, "episode": 2,
+   "app": {"id": "netflix", "name": "Netflix", "package": "com.netflix.ninja"}, "service": "netflix",
+   "poster": null, "backdrop": "/api/continue/art/3fa9c01b77d2.jpg?v=1893525060000",
+   "progress": 0.413, "position_ms": 1362000, "duration_ms": 3300000,
+   "kind": "continue", "last_played": "2030-01-01T19:31:00Z", "source": "tv"}
+ ]}
+```
+- `watching`: `access` is whether the TV's owner has allowed the app to see media sessions (one
+  ADB command, docs/KEEP-WATCHING.md). `false` means there are no `w-` items and never will be
+  until it is allowed, so an empty row can say why. `since`: listening since then (this run of the
+  app), or `null`. `titles`: how many are in the watch log. `lookup`: the setting, below.
+- A `w-` item is one title in one app: the id is made from the app's package and the title, so it
+  stays the same while the episode and the position move on.
+- `season`, `episode`, `episode_title`: only what the app's own words said. `null` when it did not
+  say; nothing is guessed.
+- `app.id` and `service`: the app's id in couch-tv's app table, or `null` for an app that is not
+  in it. `app.name` and `app.package` are always there.
+- `backdrop`: the app's own picture as a copy kept on the TV (a path on this server, to be read
+  from the same address as this answer), else the `https` address the app published for it, else,
+  with `lookup` on, JustWatch's backdrop, else `null`. `poster`: JustWatch's, and only with
+  `lookup` on and no picture of the app's own; else `null`.
+- `progress` (0 to 1, three decimals), `position_ms`, `duration_ms`: from what the app last
+  reported. `null` when it reports no position or no length. An item at 0.95 or more is finished
+  and is not in the list.
+- `last_played`: when it was last seen in the playing state, UTC.
+
+`GET /api/continue/art/<file>`: a kept picture, `image/jpeg`, 640 px wide at most. No token (an
+`<img>` cannot send one); only names the app made itself (`<12 hex digits>.jpg`) are answered,
+`404` for anything else. `Cache-Control: max-age=604800`; `?v=` changes when the picture does.
+
+`POST /api/continue/open {"id": "w-..."}`: opens the app the title was watched in
+(`"method": "app"`, `"note": "Opened Netflix."`). With `lookup` on and the title found on
+JustWatch as offered in that app, it is opened the way `POST /api/play` would in that app, and
+the answer is that route's; if that fails the app is opened. `404` when the id is not in the log
+or the app is no longer installed.
+
+`POST /api/continue/forget {"id": "w-..."}` takes one item out of the watch log, with its picture
+(`{"id": "h-0"}` takes a search-history title out). `{"all": true}` empties the watch log, its
+pictures and the raw looks. Answers with the row as it is now (`items`). `404` for an id that is
+not there, `400` with neither `id` nor `all`.
+
+`GET /api/continue/log`: what the apps' media sessions really said, for finding out what each app
+reports. The last 60 looks, newest first. It holds titles of what was watched and never leaves the
+TV except as this answer to a paired phone.
+```json
+{"ok": true, "watching": {"access": true, "since": "2030-01-01T10:00:00.000-08:00", "titles": 7, "lookup": false},
+ "looks": [
+  {"time": "2030-01-01T11:31:00.000-08:00", "package": "com.netflix.ninja", "app": "Netflix",
+   "state": "playing", "state_code": 3, "position_ms": 1362000, "speed": 1.0, "actions": 823,
+   "metadata": {
+     "android.media.metadata.TITLE": {"type": "text", "value": "Stranger Things"},
+     "android.media.metadata.DISPLAY_SUBTITLE": {"type": "text", "value": "S1:E2 The Weirdo on Maple Street"},
+     "android.media.metadata.DURATION": {"type": "number", "value": 3300000},
+     "android.media.metadata.ART": {"type": "bitmap", "width": 1280, "height": 720},
+     "description": {"media_id": "80057281"}},
+   "picture": "1280x720:5f3a91c2",
+   "read": {"title": "Stranger Things", "episode_title": "The Weirdo on Maple Street", "season": 1, "episode": 2},
+   "decision": "counted", "detail": "at 41%", "looks": 9}
+ ]}
+```
+(The values above are made up to show the shape: nobody has yet seen what Netflix publishes.)
+- `metadata`: every key the app's `MediaMetadata` had. `type` is `text` (with `value`, 400
+  characters at most), `number` (with `value`), `bitmap` (with `width` and `height`; the picture
+  itself is not here), `rating`, `other` or `unreadable`. `description`, when present, is the
+  session's own `media_id`, `media_uri` and `icon_uri`.
+- `state`: Android's playback state in words (`playing`, `paused`, `stopped`, `buffering`, ...),
+  `state_code` its number. `position_ms`: worked out from the state to the moment of the look, or
+  `null`. `state_extras` and `session_extras`, when present, are the names (not the values) of
+  the extras the app attached.
+- `read`: what the rules took the words to mean. Missing when the session named no title.
+- `decision`: `counted` (in the row), `not yet` (under 2 minutes of playing so far), `too short`
+  (the app says it is under 5 minutes long), `finished` (95% or more), `no title`, or `excluded`
+  (an app in `watching.exclude`). `detail` says why in a sentence.
+- `looks`: how many looks this line stands for. A look that says the same as the last one from
+  the same app moves that line's `time` and `position_ms` on instead of adding a line, and an
+  excluded app keeps one line only.
+
+The settings are `watching` in the on-TV app's `GET|POST /api/settings`:
+`{"watching": {"lookup": false, "exclude": ["com.spotify.tv.android", "..."]}}`. `GET` also gives
+`access` and `since` there. Only the keys sent are changed, and a change takes effect at once;
+`400` for a wrong shape. `lookup` (default `false`): look titles whose app gave no picture up on
+JustWatch, which sends the title's name there (docs/KEEP-WATCHING.md). `exclude`: the Android
+packages whose sessions are ignored; a list sent replaces the whole list.
+
+Nothing is pushed when the row changes: ask again when the home comes to the front.
+
+### Weather: `GET /api/weather` (on-TV app)
+```json
+{"ok": true, "place": "Los Angeles", "temp": 19, "code": 3, "text": "Cloudy", "is_day": false,
+ "high": 18, "low": 11, "source": "nws"}
+```
+`temp`, `high`, `low` in °C, rounded (`high` and `low` can be `null`). `code` is the WMO weather
+code Open-Meteo uses, `-1` when the sky is not known; `text` its English words. `source`:
+`open-meteo`, or `nws` when Open-Meteo did not answer and the US National Weather Service
+(`api.weather.gov`) stood in, which it can only do for a place in the United States
+(docs/CONFIG.md, "Everything else"). From `nws`, `code` is read from the service's words
+("Mostly Cloudy" is 3), and in the evening `high` is tomorrow's. `503` when neither service has
+answered and the last reading is more than two hours old. A reading is kept for 30 minutes before
+either service is asked again. It answers within about 5 seconds whatever the services do: with
+the last reading (under two hours old) when the new one has not come yet.

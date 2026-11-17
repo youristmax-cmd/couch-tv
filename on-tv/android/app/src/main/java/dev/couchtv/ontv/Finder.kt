@@ -96,6 +96,45 @@ object Finder {
         return r[ranked[0]] to r.filterIndexed { i, _ -> i != ranked[0] }
     }
 
+    /**
+     * The search result that is this title, for something watched in one app (Keep watching):
+     * the same name first, and among those the one that app offers, then one offered anywhere,
+     * then JustWatch's own order. Null when no result is the same title: a wrong picture, or the
+     * wrong show opened, is worse than none.
+     */
+    fun pick(results: List<Title>, title: String, service: String?): Title? {
+        val want = norm(title)
+        return results.withIndex().filter { sameTitle(it.value.title, title) }.sortedWith(compareBy(
+            { norm(it.value.title) != want },
+            { service != null && it.value.providers.none { p -> p.service == service } },
+            { it.value.providers.isEmpty() },
+            { it.index })).firstOrNull()?.value
+    }
+
+    /**
+     * Is one name the other's, as an app and JustWatch may each write it? The same once capitals
+     * and punctuation are gone, give or take a leading "the" or a year at the end. Also when one
+     * has a few words more in front ("Marvel's Daredevil" and "Daredevil"), or a word or two more
+     * behind ("The Office" and "The Office US"). Much more behind is another title ("Dune" is not
+     * "Dune: Part Two").
+     */
+    fun sameTitle(a: String?, b: String?): Boolean {
+        val tidy = { s: String? -> norm(s).replace(Regex(""" (19|20)\d\d$"""), "").removePrefix("the ").trim() }
+        val x = tidy(a); val y = tidy(b)
+        if (x.isEmpty() || y.isEmpty()) return false
+        if (x == y) return true
+        val (short, long) = if (x.length <= y.length) x to y else y to x
+        return (long.endsWith(" $short") && short.length * 10 >= long.length * 3) || (long.startsWith("$short ") && short.length * 10 >= long.length * 6)
+    }
+
+    /**
+     * Poster and backdrop for a title watched in one app, when the household has allowed looking
+     * titles up outside (watching.lookup). Null when JustWatch has no such title. Throws when it
+     * could not be asked.
+     */
+    fun pictures(title: String, service: String?): Pair<String?, String?>? =
+        pick(search(title), title, service)?.let { it.poster to it.backdrop }
+
     data class Episode(val season: Int, val episode: Int, val name: String?, val runtimeMin: Int?, val providers: List<Provider>)
 
     fun episode(jwId: String, season: Int, episode: Int?): Episode? {
@@ -138,11 +177,16 @@ object Finder {
         return art
     }
 
-    /** POST /api/play. Same order as the computer bridge: free, then subscription, then the rest. */
-    fun play(title: String, season: Int?, episode: Int?, service: String?, who: String?, resume: Boolean = false): JSONObject {
+    /**
+     * POST /api/play. Same order as the computer bridge: free, then subscription, then the rest.
+     * onlyThere (a Keep watching card of something watched in one app): the title must really be
+     * that title and be offered in that app, or this answers 404 and nothing is opened, so the
+     * caller can simply open the app instead.
+     */
+    fun play(title: String, season: Int?, episode: Int?, service: String?, who: String?, resume: Boolean = false, onlyThere: Boolean = false): JSONObject {
         val installed = Tv.installed()
-        val (best, _) = find(title)
-        best ?: throw ApiError(404, "could not find $title")
+        val best = (if (onlyThere) pick(search(title), title, service) else find(title).first)
+            ?: throw ApiError(404, "could not find $title")
         val ep = if (season != null && best.type == "tv") runCatching { episode(best.jwId, season, episode) }.getOrNull() else null
 
         fun usable(p: Provider) = Apps.BY_ID[p.service]?.let { p.playable && it.pkg in installed } ?: false
@@ -151,6 +195,7 @@ object Finder {
             cands = cands.filter { it.service == service }
             if (cands.isEmpty()) {
                 val app = Apps.BY_ID[service] ?: throw ApiError(400, "unknown service: $service")
+                if (onlyThere) throw ApiError(404, "${best.title} is not listed in ${app.name}")
                 val (m, note) = searchInApp(app, best.title)
                 return finish(best, app, m, note, season, episode, who, ep)
             }

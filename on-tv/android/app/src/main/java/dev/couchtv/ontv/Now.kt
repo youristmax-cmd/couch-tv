@@ -103,10 +103,21 @@ object Now {
 
     // ---------------------------------------------------------------- keep watching
 
+    /**
+     * The row's cards: first what was really watched on the TV, from other apps' media sessions
+     * (Watching.kt; the same for everyone in the house, as a session does not say who is on the
+     * couch), then what was started through Couch TV's own search, as before. No title twice.
+     */
     fun continueItems(whoFilter: String?): JSONArray {
         val h = Store.history()
         val out = JSONArray()
         val seen = HashSet<String>()
+        for (it in Watching.items()) {
+            val key = Finder.norm(it.optString("title"))
+            if (key.isEmpty() || !seen.add(key)) continue
+            out.put(it)
+            if (out.length() >= 20) return out
+        }
         for (i in 0 until h.length()) {
             val it = h.getJSONObject(i)
             val w = it.optString("who").takeIf { s -> s.isNotEmpty() && s != "null" }

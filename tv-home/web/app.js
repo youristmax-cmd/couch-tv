@@ -1445,6 +1445,9 @@
           var best = Infinity;
           shelfEls.forEach(function (el, i) { var r = el.getBoundingClientRect(), d = Math.abs(r.left + r.width / 2 - bg.left - bg.width / 2); if (d < best) { best = d; s = i; } });
         }
+      } else if (SOLAR && dy > 0 && row === lastRow && !expanded && !OFFLINE) {
+        // nothing in Keep watching yet: the press is answered with a line saying so
+        flash(t("keep_empty"));
       } else if (dy < 0 && row === 0) {
         if (cards.length && !SOLAR) zone = "shelf";
         // a score bug is showing: up goes to it (the top one), and the now-playing card is not brought back by this press

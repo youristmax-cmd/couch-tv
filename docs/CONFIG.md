@@ -305,11 +305,71 @@ card is drawn by the app itself, so it cannot be previewed in a browser.
 | Key | What it does |
 |---|---|
 | `bridge.host`, `bridge.port` [5400], `bridge.fallback_hosts` | Where the bridge runs. |
-| `weather` | `lat`, `lon`, `place`, `timezone`, for the weather on the home (Open-Meteo, no key). A suburb or city is enough; never a home address. `timezone` (for example `Europe/London`) is also the time zone the bridge writes times in. |
+| `weather` | `lat`, `lon`, `place`, `timezone`, for the weather on the home (Open-Meteo, no key). A suburb or city is enough; never a home address. `timezone` (for example `Europe/London`) is also the time zone the bridge writes times in. The on-TV app (option C) has a backup for when Open-Meteo does not answer: "The weather's backup", below. |
 | `country` [`IT` when `home.language` is `it`, else "AU"] | Two letter code, for where shows stream (JustWatch), the country in links to Apple TV and Prime Video, and the country Claude is told about. |
 | `country_name` | Optional: what to call the country in Claude's prompts, if the built-in list does not know your code. |
 | `client_name` ["Couch TV bridge"] | The name the TV shows for the bridge in its list of paired remotes. Set it before `pair_tv.py`; changing it later means pairing again. |
 | `screens` [] | Extra screens the TV can open, for example a computer through Moonlight. |
+
+### The weather's backup (on-TV app only)
+
+The on-TV app (option C) asks Open-Meteo for the weather, at most every 30 minutes. When
+Open-Meteo does not answer, it asks the **US National Weather Service** (`api.weather.gov`: free,
+no key, no account) instead, and goes back to Open-Meteo once that answers again.
+
+- **United States only.** The Weather Service knows no other country: for a place anywhere else
+  it says so, and there is no backup. The home then keeps showing the last reading for up to two
+  hours, as it does everywhere when nobody answers.
+- **What it sends.** With the backup in use, the place's `lat` and `lon` (rounded to four
+  decimals) go to `api.weather.gov` as well as to Open-Meteo. That is one more reason to give a
+  suburb or a city centre, never a home address. Nothing else is sent: no account, no name, and
+  the app calls itself `tv-home-weather/1.0`.
+- **When it is asked.** Only after Open-Meteo has failed. From then on the backup is asked first,
+  so the home does not sit through Open-Meteo's silence each time, and Open-Meteo is left alone
+  for 10 minutes. After that it is tried again, behind the backup's answer, each time a new
+  reading is due; the first time it answers it goes first again. A place the Weather Service does
+  not know is not asked about again for a week.
+- **Nobody waits long.** The home is answered within 5 seconds: with the new reading if it has
+  come, otherwise with the last one (while it is under two hours old). The asking carries on
+  behind that, and its answer is there the next time the home asks.
+- **What is asked.** Once a week for a place: where its forecast is (4 KB) and its nearest
+  weather station (4 KB). For each reading: the 12-hour forecast (13 KB) and that station's latest
+  observation (4 KB); about a tenth of that as sent, compressed.
+- **How it differs.** The temperature is the nearest station's (often an airport), or the
+  forecast's when the station reports none. The sky is the station's words, or the forecast's for
+  this half of the day, turned into the same codes Open-Meteo uses, so the home's pictures and
+  words stay the same; a "slight chance" of rain reads as partly cloudy, a "chance" as cloudy. In
+  the evening the high is tomorrow's.
+- `GET /api/weather` says which service a reading came from (`"source": "open-meteo"` or
+  `"nws"`).
+- **Its terms** (weather.gov/documentation/services-web-api, read November 2026): the data is
+  "open data, free to use for any purpose", with rate limits it does not publish, and every
+  request must carry a name for the program, which "can be anything". The same page says that
+  name "will be replaced with an API key in the future". When that happens the backup stops
+  working until someone decides whether to get a key.
+
+If Home settings on the TV has picked another place than the one set here, the home page asks
+Open-Meteo itself and the backup does not come into it.
+
+## Keep watching from the TV (`watching`, on-TV app only)
+
+The on-TV app (option C) can fill the home's Keep watching row from what was really watched on the
+TV, in any app ([KEEP-WATCHING.md](KEEP-WATCHING.md)). Nothing is listened to until you allow it
+with one ADB command (it is in that page). That app has no `config.json`: it keeps these two keys
+itself, and you change them on the phone's setup page (`http://<tv address>:5400/setup`, **Keep
+watching**) or with `POST /api/settings` (`{"watching": {...}}`).
+
+```json
+"watching": {
+  "lookup": false,
+  "exclude": ["com.spotify.tv.android", "com.att.tv"]
+}
+```
+
+| Key | What it does |
+|---|---|
+| `lookup` [`false`] | `true`: a title whose app gave no picture is looked up on JustWatch for a poster and a backdrop, and OK on its card opens the title in its app when JustWatch lists it there. **This sends the title's name, and `country`, to JustWatch**, so it is off until you switch it on. Asked once for a title; not again for a day if nothing came back. `false`: nothing about what was watched leaves the TV. |
+| `exclude` [music and voice players, YouTube, live TV: Spotify, Amazon Music, Alexa's players, the YouTube apps, DirecTV] | Android package names whose media sessions are ignored. A list you send replaces the whole built-in list, so include what you still want left out. `GET /api/settings` shows the list in use. |
 
 ## Settings made on the TV (Home settings)
 

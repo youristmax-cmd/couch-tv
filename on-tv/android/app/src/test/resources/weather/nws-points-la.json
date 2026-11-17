@@ -1,0 +1,16 @@
+{
+ "type": "Feature",
+ "properties": {
+  "gridId": "LOX",
+  "gridX": 155,
+  "gridY": 45,
+  "forecast": "https://api.weather.gov/gridpoints/LOX/155,45/forecast",
+  "forecastHourly": "https://api.weather.gov/gridpoints/LOX/155,45/forecast/hourly",
+  "observationStations": "https://api.weather.gov/gridpoints/LOX/155,45/stations",
+  "timeZone": "America/Los_Angeles",
+  "astronomicalData": {
+   "sunrise": "2026-11-16T06:26:48-08:00",
+   "sunset": "2026-11-16T16:48:47-08:00"
+  }
+ }
+}

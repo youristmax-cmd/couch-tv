@@ -20,5 +20,9 @@
       "ClipperVision": { "app": "" }
     },
     "tv_app": "com.att.tv"
+  },
+  "watching": {
+    "_note": "Keep watching from what was really watched on the TV (docs/KEEP-WATCHING.md). Nothing is listened to until one permission is given over ADB. lookup true asks JustWatch for pictures of titles whose app gives none, which sends the title's name there. Leave exclude out to keep the built-in list of apps left out (music, YouTube, live TV).",
+    "lookup": false
   }
 }

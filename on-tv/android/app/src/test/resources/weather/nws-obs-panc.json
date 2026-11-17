@@ -1,0 +1,25 @@
+{
+ "type": "Feature",
+ "properties": {
+  "stationId": "PANC",
+  "stationName": "Anchorage, Ted Stevens Anchorage International Airport",
+  "timestamp": "2026-11-17T03:50:00+00:00",
+  "textDescription": "Partly Cloudy",
+  "icon": "https://api.weather.gov/icons/land/night/sct?size=medium",
+  "presentWeather": [],
+  "temperature": {
+   "unitCode": "wmoUnit:degC",
+   "value": -4,
+   "qualityControl": "V"
+  },
+  "cloudLayers": [
+   {
+    "base": {
+     "unitCode": "wmoUnit:m",
+     "value": 1981.2
+    },
+    "amount": "SCT"
+   }
+  ]
+ }
+}

@@ -22,7 +22,7 @@ home button unless you switch that on.
 | **Turn the TV on** | yes (Wake-on-LAN) | **no** | Once the TV sleeps, this app sleeps too. See "Power on" below. |
 | What is playing | yes | yes, with ADB | Same `dumpsys media_session` reading as the bridge. Apps that report no title show the app only. |
 | Play a show by name | yes | yes | Same JustWatch lookup and deep-link table as the bridge, no key needed. |
-| Keep watching | yes | partial | Built from what was started from the phone on this TV. No imported history. |
+| Keep watching | yes | yes, with one permission | What was started from the phone on this TV, and, once you allow it, what was watched in any app with the TV's own remote (title, episode and progress as far as the app says them). No imported history. See "Keep watching" below. |
 | Sleep timer | yes | yes, with ADB | Pause, then off. |
 | Screenshot (`/api/screenshot`) | yes | yes, with ADB | |
 | Picks and taste profile | yes | no | Needs "ask". |
@@ -197,6 +197,39 @@ from ESPN) and asks for more only while a game is near and the home screen is in
 ESPN out, take the NBA team out of the list; to switch it all off, save an empty list
 (`"teams": []`).
 
+## Keep watching (optional)
+
+Out of the box the home's Keep watching row holds what was started through Couch TV's own search.
+It can also hold what you watched by opening Netflix, Hulu or any other app yourself: the title,
+the episode and how far in you are, as far as the app says them, with the app's own picture. OK on
+a card opens that app. [docs/KEEP-WATCHING.md](../docs/KEEP-WATCHING.md) has all of it.
+
+It reads the few words each app publishes about what it is playing (its "media session"), and
+Android only allows that to an app you have let in as a notification listener. Couch TV's listener
+reads no notifications; it is only the way in. Nothing is listened to until you run this once from
+a computer:
+
+```
+adb shell cmd notification allow_listener dev.couchtv.ontv/dev.couchtv.ontv.MediaAccess
+```
+
+(`disallow_listener` takes it back.) The watch log stays on the TV. One thing can send a title's
+name out, and it is off unless you switch it on: **Look up pictures** on the setup page
+(`http://<tv-ip>:5400/setup`, **Keep watching**) asks JustWatch for a picture when the app gave
+none. Music, YouTube and live TV apps are left out. This part has been tested on a computer only,
+not yet on a TV: what each app really publishes is still to be seen, and
+`http://<tv-ip>:5400/api/continue/log` on a paired phone shows it.
+
+## Weather
+
+The weather comes from Open-Meteo (free, no key), for the place on the setup page, at most every
+30 minutes. If Open-Meteo does not answer, the app asks the US National Weather Service
+(`api.weather.gov`, also free with no key) instead: for a place in the United States only, and it
+means that place's latitude and longitude then go to weather.gov as well. Anywhere else there is no
+backup. The last reading stays on screen for up to two hours when nobody answers.
+[docs/CONFIG.md](../docs/CONFIG.md), "The weather's backup", says what is asked and how the two
+differ.
+
 ## Power on
 
 The TV cannot wake itself: in standby the app is not running. Use the TV's own remote, HDMI-CEC
@@ -255,8 +288,17 @@ out every computer, so reconnect yours afterwards).
   forward by a link sometimes ignores it. With ADB it looks at the front app and the app's media
   session; without ADB it goes by its own home being in front and by sound starting on the TV.
   Also tested on a computer.
+- `Watching.kt`, `WatchRules.kt` and `MediaAccess.kt`: Keep watching from other apps' media
+  sessions. `MediaAccess` is a notification listener that reads no notifications: being allowed as
+  one is what lets `Watching.kt` see the sessions. `Watching.kt` listens, keeps the apps' pictures
+  and stores the log; `WatchRules.kt` is every rule (which apps, what counts as watched, season and
+  episode from the words, the card's shape), with no Android in it, so it is tested on a computer.
+- `Weather.kt` and `WeatherRules.kt`: the weather. `Weather.kt` asks Open-Meteo, and the US
+  National Weather Service when Open-Meteo does not answer; `WeatherRules.kt` turns either answer
+  into the home's reading (the Weather Service's words into Open-Meteo's codes), tested on a
+  computer.
 - `web/setup.html`: the phone setup page (ADB, wireless debugging pairing, names, weather, ask,
-  score bugs).
+  score bugs, keep watching).
 - Endpoints are those in `bridge/API.md`, plus `/api/pair`, `/api/pair/start`, `/api/adb`,
   `/api/adb/connect`, `/api/adb/pair`, `/api/settings`, `/api/phones/forget` and `/api/ws`.
 
@@ -269,4 +311,6 @@ with the real "Allow debugging?" dialog, keys, launch, deep link, volume, power,
 `tv-home/android/gradlew -p on-tv/android :app:testReleaseUnitTest` (from the repo folder, with
 the same JDK and Android SDK as a build) runs the score bugs' rules on the computer, with no TV and
 no emulator, against answers recorded from MLB's Stats API and from ESPN's scoreboard
-(`android/app/src/test/`).
+(`android/app/src/test/`). The same run checks the rules for sending a channel link, the Keep
+watching rules (against made-up sessions: no app's real session has been recorded yet) and the
+weather's (against answers recorded from `api.weather.gov`).

@@ -67,6 +67,21 @@ object Store {
     // ---------- watch history (plays started from the phone, and what apps report) ----------
     @Synchronized fun history(): JSONArray = (readJson("history.json") as? JSONArray) ?: JSONArray()
 
+    /**
+     * Takes a title out of the history (Keep watching's "forget this card"): the play at that
+     * place and every other play of the same title, or an older one would take the card's place.
+     * False when there is no such play.
+     */
+    @Synchronized fun removeHistory(index: Int): Boolean {
+        val old = history()
+        if (index !in 0 until old.length()) return false
+        val title = Finder.norm(old.getJSONObject(index).optString("title"))
+        val out = JSONArray()
+        for (i in 0 until old.length()) if (i != index && Finder.norm(old.getJSONObject(i).optString("title")) != title) out.put(old.get(i))
+        writeJson("history.json", out)
+        return true
+    }
+
     @Synchronized fun addHistory(item: JSONObject) {
         val old = history()
         val out = JSONArray().put(item)

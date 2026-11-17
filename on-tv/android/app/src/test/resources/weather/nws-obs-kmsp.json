@@ -1,0 +1,25 @@
+{
+ "type": "Feature",
+ "properties": {
+  "stationId": "KMSP",
+  "stationName": "Minneapolis, Minneapolis-St. Paul International Airport",
+  "timestamp": "2026-11-17T03:45:00+00:00",
+  "textDescription": "Clear",
+  "icon": "https://api.weather.gov/icons/land/night/skc?size=medium",
+  "presentWeather": [],
+  "temperature": {
+   "unitCode": "wmoUnit:degC",
+   "value": 8,
+   "qualityControl": "V"
+  },
+  "cloudLayers": [
+   {
+    "base": {
+     "unitCode": "wmoUnit:m",
+     "value": 3810
+    },
+    "amount": "CLR"
+   }
+  ]
+ }
+}
