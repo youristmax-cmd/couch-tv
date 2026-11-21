@@ -85,6 +85,24 @@ class ShowRulesTest {
         assertNull(ShowRules.match(list, "Low Tide at Noon", 43 * min, list.last().id, 3))
     }
 
+    @Test fun aShowWhosePreviewOnlyPassedByThisWeekHasToFitExactly() {
+        // the one episode of that name, with both lengths known and agreeing
+        assertEquals("tse90508", ShowRules.match(list, "The Long Way Round", 2_590_000, strict = true)!!.episode!!.id)
+        // the app gave no length, or the list has none for that episode: not sure enough
+        assertNull(ShowRules.match(list, "The Long Way Round", 0, strict = true))
+        assertNull(ShowRules.match(list, "Episode 9", 43 * min, strict = true))
+        assertNotNull(ShowRules.match(list, "The Long Way Round", 0)); assertNotNull(ShowRules.match(list, "Episode 9", 43 * min))
+        // lengths that do not agree
+        assertNull(ShowRules.match(list, "The Long Way Round", 22 * min, strict = true))
+        // a name several episodes carry: without the preview just before, not even the show is taken as known
+        assertNull(ShowRules.match(list, "Looking Back (1)", 44 * min, strict = true))
+        assertNull(ShowRules.match(list, "Loose Ends", 43 * min, strict = true))
+        assertNotNull(ShowRules.match(list, "Looking Back (1)", 44 * min))
+        // ...even when only one of them has that length ("Looking Back (2)" is 42 minutes once, 43 and 44 otherwise)
+        assertNull(ShowRules.match(list, "Looking Back (2)", 39 * min, strict = true))
+        assertEquals(ep(5, 14).id, ShowRules.match(list, "Looking Back (2)", 39 * min)!!.episode!!.id)
+    }
+
     @Test fun theListIsKeptAndReadBack() {
         val back = ShowRules.fromJson(JSONArray(ShowRules.toJson(list).toString()))
         assertEquals(list.map { listOf(it.id, it.season, it.episode, it.title, it.runtimeMin) }, back.map { listOf(it.id, it.season, it.episode, it.title, it.runtimeMin) })

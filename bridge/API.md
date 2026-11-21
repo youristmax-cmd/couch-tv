@@ -655,9 +655,15 @@ its own TV's list. The file per TV is set in `config.json` (`keep_disabled`).
 ## Images
 Every title object (find result, play, playing, continue, picks) carries `poster` (portrait,
 592 px wide) and `backdrop` (landscape, 1440 px wide, can be `null`). Both are JustWatch image
-URLs. Credit "Data from JustWatch" somewhere quiet (their terms).
+URLs. Credit "Data from JustWatch" somewhere quiet (their terms). The on-TV app's Keep watching
+items can carry a `season` and `episode` that came from TVmaze (an episode named only by its
+date, below); TVmaze's data is CC BY-SA, so credit TVmaze as their source in the same quiet place.
 
 ## Change notes
+- On-TV app, Keep watching, after four days on a TV: an item whose title is a date (a show that
+  is on every day) becomes the show's, with `episode_title` the date and `season` and `episode`
+  from TVmaze; a title is found under its own name only when the name is the same and the length
+  fits; previews' names are kept as shows to try for a week, with or without "(Trailer)".
 - On-TV app, Keep watching, after its first night on a TV: an item whose app names only the
   episode becomes the show's (`title` the show, `episode_title` the app's own word, with `lookup`
   on); an app that names nothing gets one item with `"kind": "app"`; every item has `icon` when
@@ -847,7 +853,10 @@ the `w-` items go to everyone.
   `episode_title` the name the app gave, `season` and `episode` JustWatch's numbers for it
   (`null` when several episodes of the show carry that name), `poster` and `backdrop` the show's.
   Until then, and with `lookup` off, `title` is the episode's name and the rest are `null`. The id
-  goes by the episode's name, so the next episode's card has another id.
+  goes by the episode's name, so the next episode's card has another id. A show that is on every
+  day has its episodes named by their date: `episode_title` is then that date as the app wrote it
+  ("November 10, 2030"), and `season` and `episode` are TVmaze's numbers for the episode of that
+  day (`episode` is `null` when two were on that day).
 - **`"kind": "app"`** (the third item): an app that played for 2 minutes and named nothing (Hulu
   on a Fire TV). One item for the app at most, and none while the app has an item with a real
   title. `title` is the app's name, for wording like "Continue in Hulu". `position_ms` is where
@@ -924,7 +933,7 @@ TV except as this answer to a paired phone.
      "android.media.metadata.DURATION": {"class": "java.lang.Long", "type": "number", "value": 150000}},
    "picture": null,
    "read": {"title": "Harbour Lights (Trailer)", "episode_title": null, "season": null, "episode": null},
-   "decision": "preview", "detail": "the title says it is a preview; \"Harbour Lights\" is kept for 30 minutes as the show the next title may belong to", "looks": 1}
+   "decision": "preview", "detail": "the title says it is a preview; \"Harbour Lights\" is kept for 7 days as a show a title in this app may belong to", "looks": 1}
  ]}
 ```
 (Every title, time and number above is made up, as are the items further up: "Harbour Lights" is
@@ -949,8 +958,9 @@ newer than that: they show the shape and have not been seen from a TV.)
   `null`.
 - `read`: what the rules took the words to mean. Missing when the session named no title.
 - `decision`: `counted` (in the row), `not yet` (under 2 minutes of playing so far), `too short`
-  (the app says it is under 5 minutes long), `preview` (the title says it is one: "... (Trailer)";
-  never an item, but its name is kept as a show to try for the next title in that app),
+  (the app says it is under 5 minutes long; its name is kept for a week as a show to try for the
+  titles of that app, as a preview's is), `preview` (the title says it is one: "... (Trailer)";
+  never an item, and its name is kept the same way),
   `finished` (95% or more), `no title` (the session names nothing, and there is no item for the
   app yet or the app has titles of its own), `app` (it names nothing and has its item, kind
   `app`), or `excluded` (an app in `watching.exclude`). `detail` says why in a sentence.
@@ -963,7 +973,8 @@ The settings are `watching` in the on-TV app's `GET|POST /api/settings`:
 `access` and `since` there. Only the keys sent are changed, and a change takes effect at once;
 `400` for a wrong shape. `lookup` (default `false`): ask JustWatch about what was watched, for a
 picture when the app gave none and for the show when the app names only the episode; that sends
-the names of titles, and of previews seen just before them, there (docs/KEEP-WATCHING.md).
+the names of titles, and of the previews the app played, there, and for a title that is a date
+sends show names and the date to TVmaze (docs/KEEP-WATCHING.md).
 `exclude`: the Android packages whose sessions are ignored; a list sent replaces the whole list.
 
 Nothing is pushed when the row changes: ask again when the home comes to the front.

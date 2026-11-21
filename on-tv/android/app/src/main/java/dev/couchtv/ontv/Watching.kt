@@ -38,8 +38,9 @@ import java.util.concurrent.TimeUnit
  * gets found out. Nothing is sent anywhere, with one exception that is off unless switched on:
  * with "lookup" true, JustWatch (Finder) is asked about a title: for a picture when its app gave
  * none, and, when an app names only the episode, for the show it belongs to (the names tried are
- * the ones that app gave just before, and the shows already being watched in it). That tells
- * JustWatch those names.
+ * the previews' that app has played in the last week, and the shows already being watched in
+ * it). That tells JustWatch those names. For an episode named only by its date, TVmaze (Tvmaze)
+ * is asked whether a show was on that day, which tells TVmaze the show's name and the date.
  */
 object Watching {
     private const val TAG = "couchtv.watching"
@@ -47,6 +48,7 @@ object Watching {
     private const val FILE = "watching.json"
     private const val SEEN_FILE = "watching-seen.json"
     private const val QUIET_MS = 5000L                    // a session that only reports its position moving on is looked at this often at most
+    private const val TVMAZE = "tvmaze-"                  // a show JustWatch does not have, known by TVmaze's number for it
 
     private val main = Handler(Looper.getMainLooper())
     private val work = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "watching").apply { isDaemon = true } }
@@ -156,7 +158,8 @@ object Watching {
                 // an app that refused a link is not asked about for a day: JustWatch need not be asked each time OK is pressed
                 // only to find, again, that the app takes nothing (Peacock on a Fire TV)
                 val refused = refusedAt[pkg]?.let { System.currentTimeMillis() - it < WatchRules.LOOKUP_RETRY_MS } ?: false
-                if (!refused) try {
+                // (a show JustWatch does not have, found by its date on TVmaze alone, has no link to ask for)
+                if (!refused && !showId.startsWith(TVMAZE)) try {
                     val data = Finder.links(e.episodeId, showId)
                     val ofEpisode = ShowRules.link(data.optJSONObject("episode")?.optJSONArray("offers"), app.jw)
                     val link = ofEpisode ?: ShowRules.link(data.optJSONObject("show")?.optJSONArray("offers"), app.jw)
@@ -171,9 +174,9 @@ object Watching {
                     if (uri != null) refusedAt[pkg] = System.currentTimeMillis()
                     Log.i(TAG, "open: " + (if (uri == null) "no link for $name" else "$name takes no such link") + "; opening the app")
                 } catch (ex: Exception) { Log.i(TAG, "open: ${ex.message}; opening the app instead") }
-            } else if (e.lookedOk || e.lookedAt == 0L) {
-                // (a title that was looked up and not found is not asked about again here)
-                try { return Finder.play(title, e.season, e.episode, app.id, who, resume = true, onlyThere = true) }
+            } else if ((e.lookedOk || e.lookedAt == 0L) && WatchRules.dateOf(title) == null) {
+                // (a title that was looked up and not found is not asked about again here, and one that is a date never is)
+                try { return Finder.play(title, e.season, e.episode, app.id, who, resume = true, onlyThere = true, lengthMs = e.durationMs) }
                 catch (ex: Exception) { Log.i(TAG, "open: ${ex.message}; opening the app instead") }
             }
         }
@@ -204,6 +207,7 @@ object Watching {
             log.takeWrite(SystemClock.elapsedRealtime()); write(System.currentTimeMillis())
         }
         Finder.forgetEpisodes()
+        Tvmaze.forget()
     }
 
     /** A kept picture for GET /api/continue/art/<file>, or null. Only names this app made itself. */
@@ -468,6 +472,7 @@ object Watching {
         val c = cfg
         var want: String? = null
         var playing = false
+        var news = false
         synchronized(lock) {
             val v = log.see(seen, c.exclude)
             line.put("decision", v.decision).put("detail", v.detail)
@@ -484,8 +489,11 @@ object Watching {
             else if (seen.at - seenWrittenAt >= WatchRules.WRITE_EVERY_MS) writeSeen(seen.at)
             if (v.entry != null && wantsAsking(v.entry, c.lookup, seen.wall)) want = v.entry.id
             playing = log.playing()
+            news = v.hint
         }
         want?.let { lookUp(it) }
+        // a preview's name that is new: a title still without its show, even one logged days ago, may be that show's
+        if (news) lookUpAll()
         if (playing) tick()
     }
 
@@ -527,9 +535,9 @@ object Watching {
 
     // ---------------------------------------------------------------- asking outside about a title (only with "lookup" on)
 
-    /** Is there anything to ask JustWatch about this entry now: a show to try for it, or the title itself? (Lock held.) */
+    /** Is there anything to ask outside about this entry now: shows to try for it, or the title's own name? (Lock held.) */
     private fun wantsAsking(e: WatchRules.Entry, lookup: Boolean, wall: Long): Boolean =
-        lookup && (WatchRules.wantsLookup(e, true, wall) || log.candidates(e, wall).isNotEmpty())
+        lookup && (WatchRules.wantsLookup(e, true, wall) || log.wantsShow(e, wall))
 
     /** Every title in the log with something to ask about: asked now, each once. */
     private fun lookUpAll() {
@@ -539,15 +547,22 @@ object Watching {
     }
 
     /**
-     * Asks JustWatch about one title. This sends names out of the house, which is why it only
+     * Asks outside about one title. This sends names out of the house, which is why it only
      * happens with "lookup" on.
-     *  1. The title may be an episode's name (Peacock gives nothing else). The shows it may
-     *     belong to are tried in turn (WatchRules.Log.candidates): the show is searched for, its
-     *     episode list asked for (once a day for a show), and the list searched for an episode of
-     *     that name and length. A fit makes the card the show's, with its pictures.
-     *  2. Otherwise the title is looked up under its own name, for a poster and a backdrop, when
-     *     its app gave no picture.
-     * Whatever was tried and did not work is not tried again for a day.
+     *  1. The title may be an episode's name, or the date of one (Peacock gives nothing else).
+     *     The shows it may belong to are tried in turn (WatchRules.Log.candidates), and each has
+     *     to be confirmed before it gets the card:
+     *      - an episode's name: JustWatch is searched for the show, its episode list asked for
+     *        (once a day for a show), and the list searched for an episode of that name and
+     *        length (tryShow);
+     *      - a date: TVmaze is asked whether that show was on that day (tryDate), since
+     *        JustWatch lists such episodes under other names.
+     *     A fit makes the card the show's, with its pictures.
+     *  2. Otherwise, and never for a date, the title is looked up on JustWatch under its own
+     *     name, for a poster and a backdrop, when its app gave no picture. Only a title of the
+     *     very same name, and of a length that fits, counts (Finder.own).
+     * A show that was tried and did not fit is not tried again for a day; a title that found
+     * nothing is asked about again when a new name comes up for its app.
      */
     private fun lookUp(id: String) {
         if (!cfg.lookup || !looking.add(id)) return
@@ -555,9 +570,12 @@ object Watching {
             try {
                 val e = synchronized(lock) { log.find(id) } ?: return@execute
                 val service = Apps.BY_PACKAGE[e.pkg]?.id
+                val date = WatchRules.dateOf(e.title)
                 var shown = false
-                for (c in synchronized(lock) { log.candidates(e, System.currentTimeMillis()) }) {
-                    val fit = runCatching { tryShow(e, c, service) }
+                val now = System.currentTimeMillis()
+                val shows = synchronized(lock) { if (log.wantsShow(e, now)) log.candidates(e, now) else emptyList() }
+                for (c in shows) {
+                    val fit = runCatching { if (date != null) tryDate(e, c, date, service) else tryShow(e, c, service) }
                     fit.exceptionOrNull()?.let { Log.w(TAG, "show: ${it.javaClass.simpleName}: ${it.message}") }
                     if (fit.getOrNull() == true) { shown = true; break }
                     synchronized(lock) {
@@ -565,34 +583,41 @@ object Watching {
                         if (log.takeWrite(SystemClock.elapsedRealtime())) write(System.currentTimeMillis())
                     }
                 }
+                if (shows.isNotEmpty() && !shown) synchronized(lock) {
+                    log.asked(e, System.currentTimeMillis())
+                    if (log.takeWrite(SystemClock.elapsedRealtime())) write(System.currentTimeMillis())
+                }
                 if (!shown && synchronized(lock) { WatchRules.wantsLookup(e, true, System.currentTimeMillis()) }) {
-                    val found = runCatching { Finder.pictures(e.title, service) }
+                    val (title, length, episode) = synchronized(lock) { Triple(e.title, e.durationMs, e.namesEpisode) }
+                    val found = runCatching { Finder.pictures(title, service, length, episode) }
                     found.exceptionOrNull()?.let { Log.w(TAG, "lookup: ${it.javaClass.simpleName}") }
                     synchronized(lock) {
                         val p = found.getOrNull()
                         e.lookedAt = System.currentTimeMillis()
                         e.lookedOk = p != null && (p.first != null || p.second != null)
-                        if (e.lookedOk) { e.poster = p!!.first; e.backdrop = p.second }
+                        if (e.lookedOk) { e.poster = p!!.first; e.backdrop = p.second; e.ownRule = WatchRules.OWN_RULE }
                         log.touched()
                         if (log.takeWrite(SystemClock.elapsedRealtime())) write(System.currentTimeMillis())
                     }
                 }
-                // a show just worked out may be the show of another title of the same app (its next episode)
+                // a show just worked out may be the show of another title of the same app (its next episode, another day's)
                 if (shown) work.execute { lookUpAll() }
             } finally { looking.remove(id) }
         }
     }
 
-    /** Is the title an episode of this show? True when it is, and the entry has been made the show's. */
+    /** Is the title an episode of this show, by its name? True when it is, and the entry has been made the show's. */
     private fun tryShow(e: WatchRules.Entry, c: WatchRules.Cand, service: String?): Boolean {
         var showId = c.showId; var showTitle = c.name; var poster = c.poster; var backdrop = c.backdrop
         if (showId == null) {
             val t = Finder.show(c.name, service) ?: return false
-            showId = t.jwId; showTitle = t.title; poster = t.poster; backdrop = t.backdrop
+            showId = t.id; showTitle = t.title; poster = t.poster; backdrop = t.backdrop
         }
+        if (showId.startsWith(TVMAZE)) return false          // (a show JustWatch does not have has no list to look in)
         val list = Finder.episodes(showId)
         val (name, length) = synchronized(lock) { e.title to e.durationMs }
-        val m = ShowRules.match(list, name, length, c.after, WatchRules.NEXT_SPAN) ?: return false
+        // a show whose preview only passed by some time this week has to fit more exactly than one from just before
+        val m = ShowRules.match(list, name, length, c.after, WatchRules.NEXT_SPAN, strict = c.kind == WatchRules.KEPT) ?: return false
         synchronized(lock) {
             if (log.find(e.id) !== e) return false          // forgotten meanwhile
             val wall = System.currentTimeMillis()
@@ -601,6 +626,34 @@ object Watching {
             log.takeWrite(SystemClock.elapsedRealtime()); write(wall)
         }
         Log.i(TAG, "an episode's name was matched to its show" + (if (m.episode == null) " (${m.named} episodes of that name: which one is not known)" else ""))
+        return true
+    }
+
+    /**
+     * Is the title, a date, this show's episode of that day? TVmaze says whether the show was on
+     * then (ShowRules.airedFits); the show's name and pictures are JustWatch's, as for any card.
+     * True when it is, and the entry has been made the show's.
+     */
+    private fun tryDate(e: WatchRules.Entry, c: WatchRules.Cand, date: String, service: String?): Boolean {
+        val tv = Tvmaze.show(c.name)
+        if (tv == null || !ShowRules.sameShow(tv, c.name)) return false
+        val aired = Tvmaze.aired(tv.id, date)
+        val length = synchronized(lock) { e.durationMs }
+        if (!ShowRules.airedFits(tv, aired, length, near = c.kind == WatchRules.NEAR || c.kind == WatchRules.SHOW)) return false
+        var showId = c.showId; var showTitle = c.name; var poster = c.poster; var backdrop = c.backdrop
+        if (showId == null) {
+            val t = Finder.show(c.name, service)
+            if (t != null) { showId = t.id; showTitle = t.title; poster = t.poster; backdrop = t.backdrop }
+            else { showId = TVMAZE + tv.id; showTitle = tv.name }      // JustWatch has no such show: the name, and no picture
+        }
+        synchronized(lock) {
+            if (log.find(e.id) !== e) return false
+            val wall = System.currentTimeMillis()
+            log.resolve(e, showTitle, showId, poster, backdrop, aired!!.season, aired.number, null, wall, byDate = true)
+                .forEach { x -> x.art?.let { File(artDir(), it).delete() } }
+            log.takeWrite(SystemClock.elapsedRealtime()); write(wall)
+        }
+        Log.i(TAG, "a title that is a date was matched to a show that was on that day")
         return true
     }
 }

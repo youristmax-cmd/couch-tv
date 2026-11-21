@@ -22,9 +22,12 @@ import org.json.JSONObject
  *  5. one entry per app and title: a new episode of the same series replaces the old one's.
  *  6. the row (Log.items): the newest first, without what is finished (95% or more) or older
  *     than 60 days; 40 entries are kept.
- *  7. an app that names only the episode (Peacock, seen on a Fire TV): which shows to try for it
- *     (Log.candidates), and what happens when one fits (Log.resolve). The looking up itself is
- *     outside (Finder, ShowRules) and only happens with the "lookup" setting on.
+ *  7. an app that names only the episode (Peacock, seen on a Fire TV), by its own name or, for a
+ *     show that is on every day, by the date it was first on (dateOf): which shows to try for it
+ *     (Log.candidates, Log.wantsShow), and what happens when one fits (Log.resolve). A name the
+ *     same app gave for something short (a preview, with or without "(Trailer)" after it) is a
+ *     show to try, for a week. The looking up itself is outside (Finder, Tvmaze, ShowRules) and
+ *     only happens with the "lookup" setting on.
  *  8. an app that plays and names nothing (Hulu, seen on a Fire TV): after the same 2 minutes,
  *     one card for the app itself, until that app has a card with a real title.
  * Nobody outside the TV is asked or told anything here.
@@ -44,13 +47,19 @@ object WatchRules {
     const val ART_WIDTH = 640                         // the app's own picture is kept no wider than this
     const val LOOKUP_RETRY_MS = 24 * 60 * 60_000L     // a lookup that failed is not tried again for a day
 
-    const val HINT_WINDOW_MS = 30 * 60_000L           // a preview's name is tried for a title that began within this long after it
-    const val HINT_KEEP_MS = 7L * 24 * 60 * 60_000    // and is forgotten after this long
+    const val HINT_WINDOW_MS = 30 * 60_000L           // a preview's name is tried first for a title that began within this long after it
+    const val HINT_KEEP_MS = 7L * 24 * 60 * 60_000    // it stays a name to try for this long, and is then forgotten
     const val MAX_HINTS = 40
-    const val HINT_TRIES = 3                          // previews tried for one title, the newest first
+    const val HINT_TRIES = 3                          // previews from just before, tried for one title, the newest first
+    const val KEPT_TRIES = 8                          // previews from the last week, tried for one title at one go, the newest first
     const val SHOW_TRIES = 5                          // shows already worked out in the same app, tried for one title
     const val NEXT_SPAN = 3                           // for those, the episode must be one of the next 3 after the last one watched
-    const val MAX_TRIED = 12
+    const val MAX_TRIED = 48
+    const val OWN_RULE = 3                            // the rule a title found under its own name was found by (Finder.own): older finds are not kept
+
+    const val NEAR = "near"                           // a show to try: its preview came up in the half hour before the title
+    const val KEPT = "kept"                           // its preview came up some time in the last week
+    const val SHOW = "show"                           // it is already being watched in that app
 
     const val KIND_TITLE = "title"                    // an entry for something the app named
     const val KIND_APP = "app"                        // the one entry for an app that plays and names nothing
@@ -156,6 +165,51 @@ object WatchRules {
      */
     fun trailerOf(title: String?): String? = TRAILER.find(title?.trim().orEmpty())?.groupValues?.get(1)?.let { strip(it) }?.takeIf { it.isNotEmpty() }
 
+    // ---------------------------------------------------------------- a title that is a date
+
+    private val MONTHS = listOf("january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december")
+    private val DAYS = listOf("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+    private const val WEEKDAY = """(?:([A-Za-z]{3,9})\.?,?\s+)?"""
+    private val MONTH_FIRST = Regex("""^$WEEKDAY([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$""")
+    private val DAY_FIRST = Regex("""^$WEEKDAY(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})$""")
+    private val ISO_DATE = Regex("""^(\d{4})-(\d{2})-(\d{2})$""")
+    private val US_DATE = Regex("""^(\d{1,2})/(\d{1,2})/(\d{4})$""")
+
+    /** A month's number from its name, or from its first three letters or more ("Nov", "Sept"). 0 when it is no month. */
+    private fun month(word: String): Int {
+        val w = word.lowercase()
+        return if (w.length < 3) 0 else MONTHS.indexOfFirst { it.startsWith(w) } + 1
+    }
+    private fun weekday(word: String): Boolean = word.isEmpty() || (word.length >= 3 && DAYS.any { it.startsWith(word.lowercase()) })
+
+    /**
+     * A show that is on every day names its episodes by the day they were first on, and an app that
+     * gives only the episode's name then gives only that: "November 10, 2030" (Peacock, seen on a
+     * Fire TV). The date such a title is, as 2030-11-10, or null when the title is anything else.
+     * Read: "November 10, 2030", "Nov 10, 2030", "10 November 2030", "2030-11-10", and
+     * "11/10/2030" in the order of the United States (month first); a weekday in front is passed
+     * over. The whole title must be the date, and the date must be one there is: "November 1962"
+     * (no day) is a name, and so is "February 30, 2030".
+     */
+    fun dateOf(title: String?): String? {
+        val t = title?.replace(Regex("""\s+"""), " ")?.trim().orEmpty()
+        if (t.isEmpty()) return null
+        var y = 0; var m = 0; var d = 0
+        val a = MONTH_FIRST.find(t); val b = DAY_FIRST.find(t); val c = ISO_DATE.find(t); val u = US_DATE.find(t)
+        when {
+            a != null && weekday(a.groupValues[1]) -> { m = month(a.groupValues[2]); d = a.groupValues[3].toInt(); y = a.groupValues[4].toInt() }
+            b != null && weekday(b.groupValues[1]) -> { d = b.groupValues[2].toInt(); m = month(b.groupValues[3]); y = b.groupValues[4].toInt() }
+            c != null -> { y = c.groupValues[1].toInt(); m = c.groupValues[2].toInt(); d = c.groupValues[3].toInt() }
+            u != null -> { m = u.groupValues[1].toInt(); d = u.groupValues[2].toInt(); y = u.groupValues[3].toInt() }
+            else -> return null
+        }
+        if (y !in 1900..2100 || m !in 1..12 || d < 1) return null
+        val leap = y % 4 == 0 && (y % 100 != 0 || y % 400 == 0)
+        val last = when (m) { 2 -> if (leap) 29 else 28; 4, 6, 9, 11 -> 30; else -> 31 }
+        if (d > last) return null
+        return "%04d-%02d-%02d".format(java.util.Locale.US, y, m, d)
+    }
+
     // ---------------------------------------------------------------- one look at one session
 
     /** What one app's media session said at one moment, with nothing of Android in it. */
@@ -231,11 +285,14 @@ object WatchRules {
         var mediaId: String? = null; var mediaUri: String? = null
         // what a lookup outside found (only ever asked for when the setting allows it)
         var poster: String? = null; var backdrop: String? = null; var lookedAt = 0L; var lookedOk = false
+        var ownRule = 0                   // for a title found under its own name: the rule it was found by (OWN_RULE); 0 for an older find
         // the title turned out to be an episode's name: the show it belongs to, and which episode (JustWatch's ids)
         var showTitle: String? = null; var showId: String? = null
         var showSeason: Int? = null; var showEpisode: Int? = null; var episodeId: String? = null
+        var byDate = false                // the show was found by the date the title is: a show that is on every day
         /** Shows already tried for this title without success (normalised name to when), so none is asked about twice in a day. */
         val tried = LinkedHashMap<String, Long>()
+        var showAskedAt = 0L              // when shows were last tried for it: after that, only a name that is new brings another go (or a day)
         val id get() = id(key)
         val tooShort get() = durationMs in 1 until MIN_DURATION_MS
         val progress get() = progress(positionMs, durationMs)
@@ -253,8 +310,10 @@ object WatchRules {
             .put("art", art ?: JSONObject.NULL).put("art_mark", artMark ?: JSONObject.NULL).put("art_at", artAt).put("art_uri", artUri ?: JSONObject.NULL)
             .put("media_id", mediaId ?: JSONObject.NULL).put("media_uri", mediaUri ?: JSONObject.NULL)
             .put("poster", poster ?: JSONObject.NULL).put("backdrop", backdrop ?: JSONObject.NULL).put("looked_at", lookedAt).put("looked_ok", lookedOk)
+            .put("own_rule", ownRule)
             .put("show_title", showTitle ?: JSONObject.NULL).put("show_id", showId ?: JSONObject.NULL)
             .put("show_season", showSeason ?: JSONObject.NULL).put("show_episode", showEpisode ?: JSONObject.NULL).put("episode_id", episodeId ?: JSONObject.NULL)
+            .put("by_date", byDate).put("show_asked_at", showAskedAt)
             .put("tried", JSONObject().also { t -> tried.forEach { (k, v) -> t.put(k, v) } })
     }
 
@@ -272,8 +331,10 @@ object WatchRules {
             art = str(o, "art"); artMark = str(o, "art_mark"); artAt = o.optLong("art_at"); artUri = str(o, "art_uri")
             mediaId = str(o, "media_id"); mediaUri = str(o, "media_uri")
             poster = str(o, "poster"); backdrop = str(o, "backdrop"); lookedAt = o.optLong("looked_at"); lookedOk = o.optBoolean("looked_ok")
+            ownRule = o.optInt("own_rule")
             showTitle = str(o, "show_title"); showId = str(o, "show_id")
             showSeason = int(o, "show_season"); showEpisode = int(o, "show_episode"); episodeId = str(o, "episode_id")
+            byDate = o.optBoolean("by_date"); showAskedAt = o.optLong("show_asked_at")
             o.optJSONObject("tried")?.let { t -> t.keys().forEach { k -> tried[k] = t.optLong(k) } }
         }.takeIf { it.title.isNotEmpty() }
     }
@@ -283,19 +344,24 @@ object WatchRules {
      * so), "too short", "not yet" (under its 2 minutes), "counted", "finished", or "app" (the app
      * names nothing and has its own card). write: now is a moment to write the log (it paused or
      * stopped, the title changed, or a minute of playing has gone by). picture: the session
-     * carries a picture this entry does not have a copy of yet.
+     * carries a picture this entry does not have a copy of yet. hint: this look gave a name that
+     * is new as a show to try (a preview's), so titles still without their show may now find it.
      */
-    class Verdict(val decision: String, val detail: String, val entry: Entry?, val told: Told?, val write: Boolean, val picture: Boolean)
+    class Verdict(val decision: String, val detail: String, val entry: Entry?, val told: Told?, val write: Boolean, val picture: Boolean,
+                  val hint: Boolean = false)
 
-    /** A preview's name, kept as the show the next title in the same app may belong to. */
+    /** A preview's name, kept as a show that a title in the same app may belong to. */
     class Hint(val pkg: String, val name: String, var at: Long)
 
     /**
-     * A show to try for a title that may be an episode's name. showId: already known (JustWatch's
-     * id), so no search is needed. after: only the episodes just after this one are looked at
-     * (ShowRules.match); null for a preview's name, where the whole list is.
+     * A show to try for a title that may be an episode's name, or its date. kind: NEAR (its
+     * preview came up just before the title), KEPT (some time in the last week) or SHOW (already
+     * being watched in the app). showId: already known (JustWatch's id), so no search is needed.
+     * after: only the episodes just after this one are looked at (ShowRules.match); null where the
+     * whole list is. at: when the name came up, or the show was worked out.
      */
-    class Cand(val name: String, val showId: String?, val poster: String?, val backdrop: String?, val after: String?)
+    class Cand(val name: String, val showId: String?, val poster: String?, val backdrop: String?, val after: String?,
+               val kind: String = NEAR, val at: Long = 0)
 
     /** The watch log itself: the titles that count, the ones not there yet, and what each app is playing now. */
     class Log(private val self: String) {
@@ -352,13 +418,16 @@ object WatchRules {
             val playing = s.state == STATE_PLAYING
             val told = describe(s.title, s.second) ?: return nameless(s, was, playing)
             trailerOf(told.title)?.let { name ->
-                // a preview by its own words: never a card. Its name is kept: it may be the show of the episode that starts next
-                note(s.pkg, name, s.wall)
+                // a preview by its own words: never a card. Its name is kept: it may be the show of an episode that names only itself
+                val noted = note(s.pkg, name, s.wall)
                 lastTitled.remove(s.pkg)
                 current[s.pkg] = Current(null, null, s)
-                return Verdict("preview", "the title says it is a preview; \"$name\" is kept for ${HINT_WINDOW_MS / 60_000} minutes as the show the next title may belong to",
-                    null, told, was?.key != null && take(s.at), false)
+                return Verdict("preview", "the title says it is a preview; \"$name\" is kept for ${HINT_KEEP_MS / (24 * 60 * 60_000)} days as a show a title in this app may belong to",
+                    null, told, was?.key != null && take(s.at), false, noted)
             }
+            // something short with a name and no "(Trailer)" after it is a preview all the same (Peacock plays those too): its
+            // name is kept like the others'. (A date is no show's name.)
+            val noted = s.durationMs in 1 until MIN_DURATION_MS && dateOf(told.title) == null && note(s.pkg, told.title, s.wall)
             val key = key(s.pkg, told.title)
             val e = known(key) ?: Entry(key, s.pkg).also { candidates[key] = it; tidy(s.wall) }
             // a candidate last played more than 6 hours ago starts its 2 minutes again
@@ -400,7 +469,7 @@ object WatchRules {
             val stopped = was?.since != null && !playing
             val changed = was?.key != null && was.key != key
             val write = (stopped || changed || s.at - writtenAt >= WRITE_EVERY_MS) && take(s.at)
-            return Verdict(decision, detail, e, told, write, e.counted && s.picture != null && s.picture != e.artMark)
+            return Verdict(decision, detail, e, told, write, e.counted && s.picture != null && s.picture != e.artMark, noted)
         }
 
         /**
@@ -497,6 +566,12 @@ object WatchRules {
             entries.clear(); hints.clear()
             val list = j?.optJSONArray("entries") ?: return
             for (i in 0 until list.length()) list.optJSONObject(i)?.let { entry(it) }?.let { entries[it.key] = it }
+            // A title found under its own name by an older, looser rule: the find is not kept (the first rule gave an
+            // episode named by its date the poster of a film with a name like that date). The title is as if it had never
+            // been looked up, and is looked up again by the rule there is now, the shows it may belong to first.
+            for (e in entries.values) if (e.lookedOk && e.showId == null && e.ownRule < OWN_RULE) {
+                e.poster = null; e.backdrop = null; e.lookedOk = false; e.lookedAt = 0; dirty = true
+            }
             val hs = j.optJSONArray("hints") ?: return
             for (i in 0 until hs.length()) hs.optJSONObject(i)?.let { h ->
                 val pkg = h.optString("package"); val name = h.optString("name")
@@ -506,23 +581,33 @@ object WatchRules {
 
         // ------------------------------------------------------------ rule 7: a title that may be an episode's name
 
-        /** A preview's name is kept (the newest time, when the app shows the same one again). */
-        private fun note(pkg: String, name: String, wall: Long) {
+        /**
+         * A preview's name is kept (the newest time, when the app shows the same one again). True
+         * when that is news: a name not kept before, or one last seen more than a minute ago.
+         */
+        private fun note(pkg: String, name: String, wall: Long): Boolean {
             val n = Finder.norm(name)
-            if (n.isEmpty()) return
+            if (n.isEmpty()) return false
             val old = hints.firstOrNull { it.pkg == pkg && Finder.norm(it.name) == n }
-            if (old != null) { if (wall > old.at) { old.at = wall; dirty = true } }
-            else { hints += Hint(pkg, name, wall); dirty = true }
+            if (old != null) {
+                if (wall <= old.at) return false
+                val news = wall - old.at > 60_000
+                old.at = wall; dirty = true
+                return news
+            }
+            hints += Hint(pkg, name, wall); dirty = true
             while (hints.size > MAX_HINTS) hints.remove(hints.minByOrNull { it.at })
+            return true
         }
 
         fun hints(): List<Hint> = hints.toList()
 
         /**
          * What the raw looks kept from before know (GET /api/continue/log's lines, which outlive a
-         * restart): the previews in them are remembered, and a title that does not yet know when
-         * it began is told (the oldest look that names it, or failing that when it was last
-         * played). So a title logged before the app knew any of this can still find its show.
+         * restart): the previews in them are remembered (a title that says it is one, or anything
+         * named that was under 5 minutes long), and a title that does not yet know when it began
+         * is told (the oldest look that names it, or failing that when it was last played). So a
+         * title logged before the app knew any of this can still find its show.
          */
         fun adopt(looks: JSONArray?) {
             val first = HashMap<String, Long>()
@@ -531,8 +616,11 @@ object WatchRules {
                 val pkg = l.optString("package")
                 val title = l.optJSONObject("read")?.optString("title").orEmpty()
                 val at = ScoreFeeds.parseIso(l.optString("time")) ?: continue
-                if (pkg.isEmpty() || title.isEmpty()) continue
-                trailerOf(title)?.let { note(pkg, it, at) }
+                if (pkg.isEmpty() || title.isEmpty() || l.optString("decision") == "excluded") continue
+                val length = l.optJSONObject("metadata")?.optJSONObject("android.media.metadata.DURATION")?.optLong("value") ?: 0L
+                val preview = trailerOf(title)
+                if (preview != null) note(pkg, preview, at)
+                else if (length in 1 until MIN_DURATION_MS && dateOf(title) == null) note(pkg, title, at)
                 val k = key(pkg, title)
                 if (at < (first[k] ?: Long.MAX_VALUE)) first[k] = at
             }
@@ -542,36 +630,71 @@ object WatchRules {
         private fun untried(e: Entry, name: String, wall: Long): Boolean = e.tried[Finder.norm(name)]?.let { wall - it > LOOKUP_RETRY_MS } ?: true
 
         /**
-         * May this title be an episode's name, with its show still to be found? Only something the
-         * app named without saying which episode it is, that nothing has been found for yet.
+         * May this title be an episode's name (or its date), with its show still to be found? Only
+         * something the app named without saying which episode it is, that nothing has been found
+         * for yet.
          */
         fun unresolved(e: Entry): Boolean = e.counted && e.kind == KIND_TITLE && e.showId == null && !e.lookedOk && !e.namesEpisode
 
         /**
-         * The shows to try for such a title, in order:
-         *  1. the previews the same app named in the half hour before the title came up, the
-         *     newest first, three at most (on Peacock the show's page plays one just before the
-         *     episode starts);
-         *  2. the shows already worked out for that app (the next episode of something being
-         *     watched), five at most. For these only the next few episodes are looked at.
-         * Without the ones already tried in the last day. Empty when there is nothing to try.
+         * The shows to try for such a title at one go, in order. Each still has to be confirmed
+         * outside (the show has an episode of that name, or was on on that date): a name alone
+         * never makes the card.
+         *  1. NEAR: the previews the same app named in the half hour before the title came up,
+         *     the newest first, three at most (on Peacock the show's page plays one just before
+         *     the episode starts);
+         *  2. KEPT: the other preview names kept for that app from the last week, the newest
+         *     first, eight at most at one go. A show's name does not only pass by just before:
+         *     this is also how a title logged days ago finds its show when the show's preview
+         *     next comes up;
+         *  3. SHOW: the shows already worked out for that app, five at most. For a title that is
+         *     an episode's name: the next episode of something being watched (only the next few
+         *     episodes are looked at). For a title that is a date: a show found by a date before,
+         *     which is on every day, whatever the date.
+         * Without the ones tried in the last day. Empty when there is nothing to try.
          */
         fun candidates(e: Entry, wall: Long): List<Cand> {
             if (!unresolved(e)) return emptyList()
+            val dated = dateOf(e.title) != null
+            val own = Finder.norm(e.title)
             val shows = entries.values.filter { it !== e && it.pkg == e.pkg && it.showId != null && it.showTitle != null }
                 .sortedByDescending { it.lastPlayed }.distinctBy { it.showId }
-            val out = ArrayList<Cand>()
-            hints.filter { it.pkg == e.pkg && it.at <= e.began && e.began - it.at <= HINT_WINDOW_MS }.sortedByDescending { it.at }
-                .distinctBy { Finder.norm(it.name) }.take(HINT_TRIES).forEach { h ->
-                    // a preview of a show that is already known needs no search
-                    val known = shows.firstOrNull { Finder.norm(it.showTitle) == Finder.norm(h.name) }
-                    out += Cand(known?.showTitle ?: h.name, known?.showId, known?.poster, known?.backdrop, null)
-                }
-            shows.filter { it.episodeId != null }.take(SHOW_TRIES).forEach { x ->
-                if (out.none { Finder.norm(it.name) == Finder.norm(x.showTitle) }) out += Cand(x.showTitle!!, x.showId, x.poster, x.backdrop, x.episodeId)
+            val mine = hints.filter { it.pkg == e.pkg && wall - it.at <= HINT_KEEP_MS && Finder.norm(it.name) != own }
+                .sortedByDescending { it.at }.distinctBy { Finder.norm(it.name) }
+            // a preview of a show that is already known needs no search
+            val cand = { h: Hint, kind: String ->
+                val known = shows.firstOrNull { Finder.norm(it.showTitle) == Finder.norm(h.name) }
+                Cand(known?.showTitle ?: h.name, known?.showId, known?.poster, known?.backdrop, null, kind, h.at)
             }
-            return out.filter { untried(e, it.name, wall) }
+            val near = mine.filter { it.at <= e.began && e.began - it.at <= HINT_WINDOW_MS }.take(HINT_TRIES)
+            val out = ArrayList<Cand>()
+            near.filter { untried(e, it.name, wall) }.forEach { out += cand(it, NEAR) }
+            // (the ones never tried before the ones whose day is up, so that with more than eight every one gets its turn)
+            mine.filter { it !in near && untried(e, it.name, wall) }.sortedBy { e.tried[Finder.norm(it.name)] ?: 0L }
+                .take(KEPT_TRIES).forEach { out += cand(it, KEPT) }
+            shows.filter { if (dated) it.byDate else it.episodeId != null }.take(SHOW_TRIES).forEach { x ->
+                if (untried(e, x.showTitle!!, wall) && out.none { Finder.norm(it.name) == Finder.norm(x.showTitle) })
+                    out += Cand(x.showTitle!!, x.showId, x.poster, x.backdrop, if (dated) null else x.episodeId, SHOW, x.lookedAt)
+            }
+            return out
         }
+
+        /**
+         * Is it time to try shows for this title? When there is one to try, and either none has
+         * been tried yet, or the last go was more than a day ago, or one of them is new since the
+         * last go (its preview has come up, or it has been worked out, after that). So a title
+         * that found nothing is not asked about over and over, and is asked about again the
+         * moment a new name turns up for its app. Not for a title that is finished: it has no
+         * card to put a show's name on.
+         */
+        fun wantsShow(e: Entry, wall: Long): Boolean {
+            if (e.finished) return false
+            val c = candidates(e, wall)
+            return c.isNotEmpty() && (e.showAskedAt == 0L || wall - e.showAskedAt > LOOKUP_RETRY_MS || c.any { it.at > e.showAskedAt })
+        }
+
+        /** Shows have just been tried for this title. */
+        fun asked(e: Entry, wall: Long) { e.showAskedAt = wall; if (e.counted) dirty = true }
 
         /** This show was tried for the title and did not fit, or could not be asked about: not again for a day. */
         fun tried(e: Entry, name: String, wall: Long) {
@@ -585,12 +708,14 @@ object WatchRules {
          * The title is an episode of this show. The card becomes the show's (WatchRules.item), and
          * an older card of the same show in the same app goes: one card per app and show, the
          * newest. season, episode and episodeId are null when the show is sure and the episode is
-         * not. Gives back the entries that went, for their pictures.
+         * not. byDate: the title is a date and the show was on that day (a show that is on every
+         * day: it is then tried for any other date watched in that app). Gives back the entries
+         * that went, for their pictures.
          */
         fun resolve(e: Entry, showTitle: String, showId: String, poster: String?, backdrop: String?,
-                    season: Int?, episode: Int?, episodeId: String?, wall: Long): List<Entry> {
+                    season: Int?, episode: Int?, episodeId: String?, wall: Long, byDate: Boolean = false): List<Entry> {
             e.showTitle = showTitle; e.showId = showId; e.showSeason = season; e.showEpisode = episode; e.episodeId = episodeId
-            e.poster = poster; e.backdrop = backdrop; e.lookedAt = wall; e.lookedOk = true
+            e.poster = poster; e.backdrop = backdrop; e.lookedAt = wall; e.lookedOk = true; e.byDate = byDate
             dirty = true
             val out = entries.values.filter { it.pkg == e.pkg && it.showId == showId }.sortedByDescending { it.lastPlayed }.drop(1)
             out.forEach { drop(it.key) }
@@ -641,12 +766,30 @@ object WatchRules {
     }
 
     /**
-     * Should this entry be looked up outside now, as a title? Only when the setting allows it,
-     * the app gave no picture of its own, nothing has been found yet, and the last try (if it
-     * failed) was more than a day ago. Never for an app's own card.
+     * Should this entry be looked up outside now, under its own name? Only when the setting
+     * allows it, the app gave no picture of its own, nothing has been found yet, and the last try
+     * (if it failed) was more than a day ago. Never for an app's own card, and never for a title
+     * that is a date: a date is no title's name, and whatever is found under one is something else.
      */
     fun wantsLookup(e: Entry, lookup: Boolean, wall: Long): Boolean =
-        lookup && e.counted && e.kind == KIND_TITLE && !e.hasOwnPicture && !e.lookedOk && (e.lookedAt == 0L || wall - e.lookedAt > LOOKUP_RETRY_MS)
+        lookup && e.counted && e.kind == KIND_TITLE && !e.hasOwnPicture && !e.lookedOk && dateOf(e.title) == null &&
+            (e.lookedAt == 0L || wall - e.lookedAt > LOOKUP_RETRY_MS)
+
+    /**
+     * Is what was found under a title's own name really it? The names must be the same once
+     * capitals and punctuation are gone (not merely alike), and when both lengths are known, what
+     * was found must be within a fifth of the length the app gave: a 21 minute episode is not a
+     * 2 hour film of the same name. episode: the app's own words named a season or an episode;
+     * the title is then a show's, and a show's usual length says nothing about one episode.
+     */
+    fun ownName(found: String?, foundMin: Int?, foundIsShow: Boolean, title: String?, lengthMs: Long, episode: Boolean): Boolean {
+        val a = Finder.norm(found); val b = Finder.norm(title)
+        if (a.isEmpty() || a != b) return false
+        if (episode && foundIsShow) return true
+        if (foundMin == null || foundMin <= 0 || lengthMs <= 0) return true
+        val mins = lengthMs / 60_000.0
+        return Math.abs(foundMin - mins) <= 0.2 * mins
+    }
 
     // ---------------------------------------------------------------- the evidence (GET /api/continue/log)
 

@@ -105,7 +105,7 @@ class WatchShowsTest {
         assertEquals(listOf(show), log.candidates(e, wall0 + t + 25 * 60 * min).map { it.name })
     }
 
-    @Test fun onlyPreviewsFromTheSameAppInTheHalfHourBefore() {
+    @Test fun thePreviewsFromJustBeforeFirstThenTheRestOfTheWeek() {
         assertEquals(30 * min, WatchRules.HINT_WINDOW_MS)
         val log = WatchRules.Log(me)
         val start = 100 * min
@@ -116,11 +116,15 @@ class WatchShowsTest {
         log.see(seen(peacock, "Second (Trailer)", at = start - 2 * min), ex)
         log.see(seen(peacock, "First (Trailer)", at = start - 5000), ex)
         val t = watch(log, peacock, episode, from = start, dur = length, pos = 0)
-        // seen after the episode began (the app's home, on the way out): not a show to try for it
+        // seen after the episode began (the app's home, on the way out)
         log.see(seen(peacock, "Quillfeather Bay (Trailer)", state = paused, at = t, dur = 30_000), ex)
         val e = entryOf(log, peacock, episode)
-        // the newest first, and three at most
-        assertEquals(listOf("First", "Second", "Fourth"), log.candidates(e, wall0 + t).map { it.name })
+        // from the half hour before, the newest first and three at most; then the others this app has named, the newest first
+        assertEquals(listOf("First" to WatchRules.NEAR, "Second" to WatchRules.NEAR, "Fourth" to WatchRules.NEAR,
+            "Quillfeather Bay" to WatchRules.KEPT, "Third" to WatchRules.KEPT, "Too Early" to WatchRules.KEPT),
+            log.candidates(e, wall0 + t).map { it.name to it.kind })
+        // never another app's
+        assertTrue(log.candidates(e, wall0 + t).none { it.name == "Other App" })
     }
 
     @Test fun whatIsNotTakenForAnEpisodesName() {
@@ -278,9 +282,10 @@ class WatchShowsTest {
         assertEquals(at("2030-01-01T19:12:17.000-08:00"), e.began)                 // the oldest look that names the episode
         assertEquals(setOf(show, "Quillfeather Bay"), log.hints().map { it.name }.toSet())
         assertEquals(at("2030-01-01T19:12:10.000-08:00"), log.hints().first { it.name == show }.at)
-        // the preview seven seconds before the episode is the show to try; the one seen ten minutes later, on the way out, is not
+        // the preview seven seconds before the episode is the show to try first; the one seen ten minutes later, on the way
+        // out, only after it, as one of the week's
         val c = log.candidates(e, at("2030-01-01T19:35:00-08:00"))
-        assertEquals(listOf(show), c.map { it.name })
+        assertEquals(listOf(show to WatchRules.NEAR, "Quillfeather Bay" to WatchRules.KEPT), c.map { it.name to it.kind })
         // and in the show's episode list (made up, in the shape JustWatch sends) there is one episode of that name and length
         val m = ShowRules.match(ShowRules.episodes(load("jw-episodes-light-made-up.json")), e.title, e.durationMs, c[0].after, WatchRules.NEXT_SPAN)!!
         assertEquals("tse90508", m.episode!!.id)

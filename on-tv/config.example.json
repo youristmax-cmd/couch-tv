@@ -22,7 +22,7 @@
     "tv_app": "com.att.tv"
   },
   "watching": {
-    "_note": "Keep watching from what was really watched on the TV (docs/KEEP-WATCHING.md). Nothing is listened to until one permission is given over ADB. lookup true asks JustWatch for a picture when an app gives none, and for the show when an app names only the episode; that sends names of what was watched there. Leave exclude out to keep the built-in list of apps left out (music, YouTube, live TV).",
+    "_note": "Keep watching from what was really watched on the TV (docs/KEEP-WATCHING.md). Nothing is listened to until one permission is given over ADB. lookup true asks JustWatch for a picture when an app gives none, and for the show when an app names only the episode (and TVmaze, when the episode is named only by its date); that sends names of what was watched, and of previews the app played, there. Leave exclude out to keep the built-in list of apps left out (music, YouTube, live TV).",
     "lookup": false
   }
 }

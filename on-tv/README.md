@@ -204,8 +204,9 @@ It can also hold what you watched by opening Netflix, Peacock or any other app y
 title, the episode and how far in you are, as far as the app lets them be known. OK on a card
 opens that app. [docs/KEEP-WATCHING.md](../docs/KEEP-WATCHING.md) has all of it, with what each
 app has been seen to give so far. Apps differ a great deal: on a Fire TV, Peacock names only the
-episode (the show is worked out from the preview it plays just before, if you switch looking up
-on), and Hulu names nothing at all (it gets one card, "Continue in Hulu").
+episode, by its name or, for a show that is on every day, by its date (the show is worked out
+from the previews it plays, if you switch looking up on), and Hulu names nothing at all (it gets
+one card, "Continue in Hulu").
 
 It reads the few words each app publishes about what it is playing (its "media session"), and
 Android only allows that to an app you have let in as a notification listener. Couch TV's listener
@@ -219,8 +220,10 @@ adb shell cmd notification allow_listener dev.couchtv.ontv/dev.couchtv.ontv.Medi
 (`disallow_listener` takes it back.) The watch log stays on the TV. One thing can send names out,
 and it is off unless you switch it on: **Look up shows and pictures** on the setup page
 (`http://<tv-ip>:5400/setup`, **Keep watching**) asks JustWatch for a picture when the app gave
-none, and for the show when the app names only the episode. Music, YouTube and live TV apps are
-left out. It has run on one Fire TV so far (November 2026); what any other app publishes is still
+none, and for the show when the app names only the episode; for an episode named only by its date
+it asks TVmaze whether the show was on that day (TVmaze's data is CC BY-SA). Music, YouTube and
+live TV apps are left out. It has run on one Fire TV so far (November 2026); what any other app
+publishes is still
 to be seen, and `http://<tv-ip>:5400/api/continue/log` on a paired phone shows it. OK on a card
 opens the very episode only in an app that accepts links, and on a Fire TV Peacock does not.
 
@@ -299,7 +302,8 @@ out every computer, so reconnect yours afterwards).
   episode from the words, the card's shape, which shows to try for an app that names only the
   episode, the one card for an app that names nothing), with no Android in it, so it is tested on
   a computer. `ShowRules.kt` reads JustWatch's answers about a show (its episode list, asked for
-  without the offers, and the offers of one episode), tested the same way.
+  without the offers, and the offers of one episode) and TVmaze's (whether a show was on on a
+  day), tested the same way. `Tvmaze.kt` does that asking, and keeps the answers.
 - `Weather.kt` and `WeatherRules.kt`: the weather. `Weather.kt` asks Open-Meteo, and the US
   National Weather Service when Open-Meteo does not answer; `WeatherRules.kt` turns either answer
   into the home's reading (the Weather Service's words into Open-Meteo's codes), tested on a

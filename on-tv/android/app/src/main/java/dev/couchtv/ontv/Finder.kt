@@ -148,22 +148,80 @@ object Finder {
     }
 
     /**
-     * Poster and backdrop for a title watched in one app, when the household has allowed looking
-     * titles up outside (watching.lookup). Null when JustWatch has no such title. Throws when it
-     * could not be asked.
+     * The search result that is a title watched under that very name in one app (Keep watching):
+     * only one whose name is the same and whose length fits (WatchRules.ownName), and among those
+     * the one that app offers, then one offered anywhere, then JustWatch's own order. Null when
+     * there is none: a name that is merely alike is another title.
      */
-    fun pictures(title: String, service: String?): Pair<String?, String?>? =
-        pick(search(title), title, service)?.let { it.poster to it.backdrop }
+    fun own(results: List<Title>, title: String, service: String?, lengthMs: Long, episode: Boolean): Title? =
+        results.withIndex().filter { WatchRules.ownName(it.value.title, it.value.runtimeMin, it.value.type == "tv", title, lengthMs, episode) }.sortedWith(compareBy(
+            { service != null && it.value.providers.none { p -> p.service == service } },
+            { it.value.providers.isEmpty() },
+            { it.index })).firstOrNull()?.value
+
+    /**
+     * Poster and backdrop for a title watched in one app, when the household has allowed looking
+     * titles up outside (watching.lookup). lengthMs: how long the app said it is; episode: the
+     * app's own words named a season or an episode. Null when JustWatch has no title of that very
+     * name and length. Throws when it could not be asked.
+     */
+    fun pictures(title: String, service: String?, lengthMs: Long = 0, episode: Boolean = false): Pair<String?, String?>? =
+        own(search(title), title, service, lengthMs, episode)?.let { it.poster to it.backdrop }
+
+    /** A show found by a name: JustWatch's id for it, its name there, and its pictures. */
+    class ShowRef(val id: String, val title: String, val poster: String?, val backdrop: String?)
+
+    private const val LISTS_FILE = "watching-shows.json"      // {"lists": {"<show id>": {"at", "episodes": [[id, season, number, name, minutes], ...]}},
+                                                              //  "names": {"<name>|<service>": {"at", "id", "title", "poster", "backdrop"} or {"at", "none": true}}}
+    private const val NAMES_MS = 7L * 24 * 60 * 60_000        // a name's answer is kept this long, a miss as well
+    private const val NAMES_KEPT = 60
+    private val lists = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<ShowRules.Ep>>>()
+    private val names = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, ShowRef?>>()
+    private var listsRead = false
+
+    private fun readKept() {
+        if (listsRead) return
+        listsRead = true
+        runCatching {
+            val j = Store.readJson(LISTS_FILE) as? JSONObject
+            j?.optJSONObject("lists")?.let { l -> l.keys().forEach { id -> l.optJSONObject(id)?.let { lists[id] = it.optLong("at") to ShowRules.fromJson(it.optJSONArray("episodes")) } } }
+            j?.optJSONObject("names")?.let { n -> n.keys().forEach { k -> n.optJSONObject(k)?.let { o ->
+                val text = { key: String -> if (o.isNull(key)) null else o.optString(key).takeIf { it.isNotEmpty() } }
+                names[k] = o.optLong("at") to (if (o.optBoolean("none") || text("id") == null) null else ShowRef(text("id")!!, text("title") ?: "", text("poster"), text("backdrop")))
+            } } }
+        }
+    }
+
+    private fun writeKept() {
+        runCatching {
+            val l = JSONObject(); val n = JSONObject()
+            lists.forEach { (id, v) -> l.put(id, JSONObject().put("at", v.first).put("episodes", ShowRules.toJson(v.second))) }
+            names.forEach { (k, v) ->
+                val s = v.second
+                n.put(k, if (s == null) JSONObject().put("at", v.first).put("none", true)
+                else JSONObject().put("at", v.first).put("id", s.id).put("title", s.title).put("poster", s.poster ?: JSONObject.NULL).put("backdrop", s.backdrop ?: JSONObject.NULL))
+            }
+            Store.writeJson(LISTS_FILE, JSONObject().put("lists", l).put("names", n))
+        }
+    }
 
     /**
      * The show of this name, for a name an app gave (a preview's): the search result that is the
-     * same title and is a show, the one that app offers first. Null when there is none.
+     * same title and is a show, the one that app offers first. Null when there is none. The
+     * answer is kept for a week, a miss as well, so the same preview's name is not searched for
+     * again for every title it is tried for. Throws when JustWatch could not be asked.
      */
-    fun show(name: String, service: String?): Title? = pick(search(name, "tv", 5), name, service)
-
-    private const val LISTS_FILE = "watching-shows.json"      // {"<show id>": {"at": ..., "episodes": [[id, season, number, name, minutes], ...]}}
-    private val lists = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<ShowRules.Ep>>>()
-    private var listsRead = false
+    @Synchronized fun show(name: String, service: String?): ShowRef? {
+        val now = System.currentTimeMillis()
+        readKept()
+        val key = norm(name) + "|" + (service ?: "")
+        names[key]?.takeIf { now - it.first < NAMES_MS }?.let { return it.second }
+        val found = pick(search(name, "tv", 5), name, service)?.let { ShowRef(it.jwId, it.title, it.poster, it.backdrop) }
+        names[key] = now to found
+        names.entries.sortedByDescending { it.value.first }.drop(NAMES_KEPT).forEach { names.remove(it.key) }
+        writeKept()
+        return found
+    }
 
     /**
      * A show's episodes, without their offers (ShowRules). Asked for once a day for a show, and
@@ -173,29 +231,19 @@ object Finder {
      */
     @Synchronized fun episodes(showId: String): List<ShowRules.Ep> {
         val now = System.currentTimeMillis()
-        if (!listsRead) {
-            listsRead = true
-            runCatching {
-                val j = Store.readJson(LISTS_FILE) as? JSONObject
-                j?.keys()?.forEach { id -> j.optJSONObject(id)?.let { lists[id] = it.optLong("at") to ShowRules.fromJson(it.optJSONArray("episodes")) } }
-            }
-        }
+        readKept()
         lists[showId]?.takeIf { now - it.first < ShowRules.LIST_MS && it.second.isNotEmpty() }?.let { return it.second }
         val list = ShowRules.episodes(post(EPISODES, JSONObject().put("id", showId), ShowRules.LIST_MAX_BYTES))
         lists[showId] = now to list
         // only a few shows' lists are kept: the ones asked for last
         lists.entries.sortedByDescending { it.value.first }.drop(ShowRules.LISTS_KEPT).forEach { lists.remove(it.key) }
-        runCatching {
-            val j = JSONObject()
-            lists.forEach { (id, v) -> j.put(id, JSONObject().put("at", v.first).put("episodes", ShowRules.toJson(v.second))) }
-            Store.writeJson(LISTS_FILE, j)
-        }
+        writeKept()
         return list
     }
 
-    /** The kept episode lists go (they say which shows were looked into): part of "forget what was watched". */
+    /** The kept episode lists and names go (they say which shows were looked into): part of "forget what was watched". */
     @Synchronized fun forgetEpisodes() {
-        lists.clear(); listsRead = true
+        lists.clear(); names.clear(); listsRead = true
         runCatching { Store.writeJson(LISTS_FILE, JSONObject()) }
     }
 
@@ -245,9 +293,9 @@ object Finder {
      * that title and be offered in that app, or this answers 404 and nothing is opened, so the
      * caller can simply open the app instead.
      */
-    fun play(title: String, season: Int?, episode: Int?, service: String?, who: String?, resume: Boolean = false, onlyThere: Boolean = false): JSONObject {
+    fun play(title: String, season: Int?, episode: Int?, service: String?, who: String?, resume: Boolean = false, onlyThere: Boolean = false, lengthMs: Long = 0): JSONObject {
         val installed = Tv.installed()
-        val best = (if (onlyThere) pick(search(title), title, service) else find(title).first)
+        val best = (if (onlyThere) own(search(title), title, service, lengthMs, season != null || episode != null) else find(title).first)
             ?: throw ApiError(404, "could not find $title")
         val ep = if (season != null && best.type == "tv") runCatching { episode(best.jwId, season, episode) }.getOrNull() else null
 

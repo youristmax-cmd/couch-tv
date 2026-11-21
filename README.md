@@ -654,7 +654,12 @@ TV home (tv-home/)      --->  bridge (for shows and picks)               (Androi
 - The streaming app logos in `remote/src/app-logos/` belong to their owners.
 - Fonts: Inter and Antonio (both SIL Open Font Licence).
 - Show data and posters: JustWatch (credit them if you publish anything built on this).
-- Weather: Open-Meteo.
+- Which episode of a daily show aired on a date (the on-TV app's Keep watching, only with its
+  lookup switched on): TVmaze, whose data is CC BY-SA (credit them, and share alike, if you publish
+  anything built on it).
+- Weather: Open-Meteo, and the US National Weather Service when Open-Meteo does not answer (on-TV app).
+- Scores: MLB's Stats API (individual, non-commercial, non-bulk use) and ESPN's public scoreboard,
+  which is not an official feed (docs/SCORES.md).
 - The doorbell card and Home Assistant scenes on the TV started in the
   [roliusz fork](https://github.com/roliusz/couch-tv).
 - The no-computer install for option A came from

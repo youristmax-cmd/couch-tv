@@ -1,0 +1,18 @@
+[
+ {
+  "id": 7700183,
+  "url": "https://www.tvmaze.com/episodes/7700183/up-late-12x183-ada-quill-bram-sorrel",
+  "name": "Ada Quill, Bram Sorrel",
+  "season": 12,
+  "number": 183,
+  "type": "regular",
+  "airdate": "2030-11-10",
+  "airtime": "23:00",
+  "airstamp": "2030-11-11T04:00:00+00:00",
+  "runtime": 30,
+  "rating": {"average": null},
+  "image": null,
+  "summary": null,
+  "_links": {"self": {"href": "https://api.tvmaze.com/episodes/7700183"}, "show": {"href": "https://api.tvmaze.com/shows/77001", "name": "Up Late"}}
+ }
+]
